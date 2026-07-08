@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AE-Sentinel · 프론트엔드 와이어프레임 (초안 v2)</title>
+<style>
+  :root{
+    /* 통일 팔레트 — 무채(웜그레이) 지배 + 절제된 어시(earthy) 상태색 + 단일 액센트 */
+    --ink:#1f1f21;        /* 근-검정 잉크 */
+    --graphite:#3b3b3f;
+    --muted:#8a8882;      /* 웜 그레이 (보조 텍스트) */
+    --line:#e5e3de;       /* 웜 헤어라인 */
+    --wire:#ecebe6;       /* 플레이스홀더 채움 */
+    --paper:#f4f3f0;      /* 캔버스(웜 파치먼트) */
+    --tile:#232325;       /* 다크 관제 서피스 */
+    --accent:#0b5cad;     /* 상호작용/CTA 전용 (design.md 액센트의 살짝 낮춘 톤) */
+    /* 상태색: 같은 채도·명도 대역의 어시 톤 — "비슷한 색상"으로 통일감 */
+    --normal:#6f8476;     /* 세이지 */
+    --caution:#b0894f;    /* 오크(ochre) */
+    --danger:#a8493f;     /* 테라코타 */
+    --danger-bg:#efe4e1; --danger-line:#d8bdb7; --danger-ink:#8c3b32;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:Inter,system-ui,-apple-system,"SF Pro Text",sans-serif;
+    line-height:1.5;-webkit-font-smoothing:antialiased;}
+  header.top{padding:40px 32px 8px;max-width:1180px;margin:0 auto;}
+  header.top h1{font-size:32px;font-weight:600;letter-spacing:-.5px;margin:0 0 6px;}
+  header.top p{color:var(--muted);margin:0;font-size:15px;max-width:780px}
+  main{max-width:1180px;margin:0 auto;padding:16px 32px 96px;}
+  h2.section{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);margin:56px 0 16px;border-bottom:1px solid var(--line);padding-bottom:8px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:13px;color:var(--muted);
+    padding:14px 18px}
+  .chip{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--ink);font-size:13px}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.n{background:var(--normal)} .dot.c{background:var(--caution)} .dot.d{background:var(--danger)}
+  .dot.b{background:var(--accent)}
+  .sw{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+  .sw span{width:52px;height:30px;display:flex;align-items:flex-end;justify-content:center;font-size:9px;color:#fff;padding-bottom:2px}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px}
+  .flow .step{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600}
+  .flow .arw{color:var(--muted);font-size:18px}
+  .flow .step small{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:2px}
+  .grid{display:grid;grid-template-columns:1fr;gap:22px}
+  @media(min-width:920px){ .withnote{grid-template-columns:1.55fr .95fr} }
+  .frame{background:#fff;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .bar{display:flex;align-items:center;gap:7px;padding:9px 12px;background:#f0efeb;border-bottom:1px solid var(--line)}
+  .bar i{width:10px;height:10px;border-radius:50%;background:#d3d1cb;display:inline-block}
+  .bar span{margin-left:8px;font-size:11px;color:var(--muted)}
+  .canvas{padding:16px}
+  .canvas.dark{background:var(--tile)}
+  .w{background:var(--wire);border:1px dashed #cbc9c2;border-radius:8px;display:flex;align-items:center;
+    justify-content:center;color:#8a887f;font-size:12px;text-align:center;padding:10px}
+  .w.solid{border-style:solid}
+  .row{display:flex;gap:12px}
+  .col{display:flex;flex-direction:column;gap:12px}
+  .nav{display:flex;align-items:center;justify-content:space-between;background:#1b1b1d;color:#fff;
+    border-radius:6px;padding:8px 12px;font-size:12px}
+  .nav .lft{display:flex;gap:16px;align-items:center;opacity:.92}
+  .nav .rgt{display:flex;gap:10px;align-items:center}
+  .pill{background:var(--accent);color:#fff;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600;text-align:center}
+  .pill.ghost{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+  .btn-neutral{background:#fff;border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:13px;
+    display:flex;align-items:center;justify-content:center;gap:9px;color:var(--ink);font-weight:500}
+  .g{width:15px;height:15px;border-radius:50%;background:
+     conic-gradient(#e8e6e1 0 100%);border:1px solid #d7d5cf;display:inline-flex;align-items:center;justify-content:center;
+     font-size:10px;font-weight:700;color:#6f6d67}
+  .divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px}
+  .divider:before,.divider:after{content:"";flex:1;height:1px;background:#3a3a3c}
+  .kpi{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left}
+  .kpi b{display:block;font-size:22px;font-weight:600;letter-spacing:-.3px}
+  .kpi small{color:var(--muted);font-size:11px}
+  /* map */
+  .map{position:relative;height:300px;border-radius:12px;background:
+     repeating-linear-gradient(90deg,#2b2b2d 0 39px,#2f2f31 39px 40px),
+     repeating-linear-gradient(0deg,#2b2b2d 0 39px,#2f2f31 39px 40px);
+     border:1px solid #38383a;overflow:hidden}
+  .quay{position:absolute;left:0;right:0;bottom:64px;height:16px;background:#46464a}
+  .line{position:absolute;bottom:80px;width:2px;height:40px;background:#8a8882}
+  .bollard{position:absolute;bottom:74px;width:12px;height:12px;border-radius:50%;background:#cbc9c2;transform:translateX(-5px)}
+  .zone{position:absolute;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;opacity:.55}
+  .zone.d{background:var(--danger)} .zone.c{background:var(--caution)}
+  .tag{position:absolute;font-size:10px;font-weight:700;color:#fff;padding:2px 6px;border-radius:6px}
+  .tag.n{background:var(--normal)} .tag.c{background:var(--caution)} .tag.d{background:var(--danger)}
+  .listitem{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);
+    border-radius:10px;padding:9px 12px;font-size:12px}
+  .listitem .bar2{flex:1;height:6px;background:#eeece7;border-radius:3px;position:relative}
+  .listitem .bar2 i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+  .banner{display:flex;align-items:center;gap:10px;background:var(--danger-bg);border:1px solid var(--danger-line);
+    color:var(--danger-ink);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600}
+  /* 3D rope viewport */
+  .rope3d{position:relative;height:220px;border-radius:12px;background:radial-gradient(120% 100% at 50% 0,#2b2b2e,#202022);
+    border:1px solid #38383a;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .rope{position:relative;width:26px;height:170px}
+  .rope .strand{position:absolute;top:0;bottom:0;width:5px;border-radius:3px;background:linear-gradient(#b9b0a2,#8f8677)}
+  .rope .s1{left:2px;transform:rotate(2deg)} .rope .s2{left:10px} .rope .s3{left:18px;transform:rotate(-2deg)}
+  .rope .fray{position:absolute;right:-10px;top:70px;width:16px;height:2px;background:#b9b0a2;transform:rotate(25deg)}
+  .badge3d{position:absolute;top:10px;left:12px;font-size:10px;color:#c9c7c0;background:#00000033;border:1px solid #ffffff22;padding:3px 8px;border-radius:999px}
+  .statechip{position:absolute;top:10px;right:12px;font-size:10px;font-weight:700;color:#fff;padding:3px 9px;border-radius:999px;background:var(--danger)}
+  .states{display:flex;gap:8px;margin-top:10px}
+  .states .s{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px;font-size:11px;text-align:center;color:var(--muted)}
+  .states .s b{display:block;color:var(--ink);font-size:11px;margin-bottom:2px}
+  .note{font-size:13px}
+  .note h4{margin:0 0 8px;font-size:13px;letter-spacing:-.2px}
+  .note ul{margin:0 0 14px;padding-left:16px;color:var(--graphite)}
+  .note li{margin:4px 0}
+  .note .k{font-weight:600;color:var(--ink)}
+  .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 7px;border-radius:6px;background:#eef2f7;color:var(--accent);margin-right:6px}
+  .badge.perf{background:#eef1ee;color:#5c7266}
+  .badge.a11y{background:#f3ede2;color:#8a6a30}
+  .decide{background:#fff;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:16px 18px;margin:10px 0}
+  .decide h4{margin:0 0 6px;font-size:14px}
+  .decide p{margin:0;font-size:13px;color:var(--graphite)}
+  .muted{color:var(--muted)} .small{font-size:12px}
+  code{background:#efeeea;border-radius:5px;padding:1px 5px;font-size:12px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>AE-Sentinel — 프론트엔드 와이어프레임 (초안 v2)</h1>
+  <p>계류삭 파단 예측 · 스냅백 위험구역 관제 대시보드. <b>통일 팔레트</b>(무채 웜그레이 지배 + 절제된 어시 상태색 + 단일 액센트)로 색을 정돈했고, <b>이벤트 상세에 three.js 홋줄 3D 실시간 뷰</b>, 로그인에 <b>이메일/비밀번호 + 구글</b>을 반영했습니다. 구조·흐름 확인용 저해상도 스케치입니다.</p>
+</header>
+<main>
+
+  <h2 class="section">통일 팔레트</h2>
+  <div class="card legend">
+    <div class="sw" title="neutrals">
+      <span style="background:#1f1f21">ink</span>
+      <span style="background:#3b3b3f">graphite</span>
+      <span style="background:#8a8882">muted</span>
+      <span style="background:#f4f3f0;color:#8a8882">paper</span>
+      <span style="background:#232325">tile</span>
+    </div>
+    <span class="chip"><span class="dot b"></span>Accent</span>
+    <span class="chip"><span class="dot n"></span>정상</span>
+    <span class="chip"><span class="dot c"></span>주의</span>
+    <span class="chip"><span class="dot d"></span>위험</span>
+    <span class="small muted">상태색은 같은 채도·명도 대역의 어시 톤으로 통일 — 색+아이콘+텍스트 3중 신호</span>
+  </div>
+
+  <h2 class="section">전체 화면 흐름</h2>
+  <div class="flow">
+    <div class="step">① 로그인 <small>이메일·비번 + Google</small></div>
+    <div class="arw">→</div>
+    <div class="step">② 관제 대시보드 <small>지도+상태+실시간</small></div>
+    <div class="arw">→</div>
+    <div class="step">③ 이벤트 상세 <small>three.js 홋줄 3D · Ack</small></div>
+    <div class="arw">→</div>
+    <div class="step">④ 이벤트 이력 <small>필터/조회</small></div>
+  </div>
+
+  <!-- SCREEN 1: LOGIN -->
+  <h2 class="section">① 로그인 (Cognito · 이메일/비번 + Google)</h2>
+  <div class="grid withnote">
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>ae-sentinel.app / login</span></div>
+      <div class="canvas dark" style="display:flex;align-items:center;justify-content:center;min-height:340px">
+        <div class="col" style="width:300px">
+          <div class="w" style="height:34px;background:#2c2c2f;border-color:#3d3d40;color:#a9a79f">AE-Sentinel 로고 · 태그라인</div>
+          <div class="w solid" style="height:42px;background:#fff">이메일</div>
+          <div class="w solid" style="height:42px;background:#fff">비밀번호</div>
+          <div class="pill" style="padding:11px">로그인</div>
+          <div class="divider">또는</div>
+          <div class="btn-neutral"><span class="g">G</span>Google로 계속하기</div>
+          <div class="small" style="color:#8a887f;text-align:center">최초 로그인 시 비밀번호 변경 챌린지 처리</div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <h4>동작</h4>
+      <ul>
+        <li><span class="k">이메일/비번</span>: User Pool 네이티브(Amplify <code>USER_SRP_AUTH</code>, 리다이렉트 없음). 계정은 관리자 발급.</li>
+        <li><span class="k">Google로 계속하기</span>: OAuth2 페더레이션 — Cognito 도메인 경유 <code>signInWithRedirect({provider:'Google'})</code>.</li>
+        <li>소셜은 <span class="k">Google만</span>. 성공 → ID 토큰 저장 → 대시보드.</li>
+      </ul>
+      <h4>메모</h4>
+      <ul>
+        <li><span class="badge a11y">A11y</span>레이블·에러 텍스트·포커스 링. Google 버튼은 중립 톤(액센트 남용 방지).</li>
+        <li><span class="badge perf">성능</span>인증 청크 최소, 대시보드는 로그인 후 로드.</li>
+        <li><span class="k">의존성</span>: Google IdP는 Google Cloud OAuth 클라이언트(ID/시크릿) 필요 — 사용자 준비.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: DASHBOARD -->
+  <h2 class="section">② 관제 대시보드 (홈)</h2>
+  <div class="grid withnote">
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>ae-sentinel.app / dashboard</span></div>
+      <div class="canvas">
+        <div class="nav">
+          <div class="lft"><b>AE-Sentinel</b><span>대시보드</span><span>이벤트</span></div>
+          <div class="rgt"><span class="chip" style="color:#eceae4;font-size:11px"><span class="dot n"></span>실시간 연결됨</span><span class="pill ghost" style="border-color:#5a6b7d;color:#9fb4c7;">관리자 ▾</span></div>
+        </div>
+        <div class="banner" style="margin-top:12px">⚠ 위험 감지 — mooring-03 파단 위험. 위험구역 확인 요망 · <span style="color:var(--accent)">상세보기</span></div>
+        <div class="row" style="margin-top:12px">
+          <div class="kpi"><b>12</b><small>전체 라인</small></div>
+          <div class="kpi"><b style="color:var(--normal)">9</b><small>정상</small></div>
+          <div class="kpi"><b style="color:var(--caution)">2</b><small>주의</small></div>
+          <div class="kpi"><b style="color:var(--danger)">1</b><small>위험</small></div>
+        </div>
+        <div class="row" style="margin-top:12px;align-items:stretch">
+          <div style="flex:1.7">
+            <div class="small muted" style="margin-bottom:6px">안벽 도면 · 스냅백 위험구역 (SVG)</div>
+            <div class="map">
+              <div class="quay"></div>
+              <div class="bollard" style="left:22%"></div><div class="line" style="left:22%"></div><span class="tag n" style="left:18%;bottom:130px">01 정상</span>
+              <div class="bollard" style="left:50%"></div><div class="line" style="left:50%"></div>
+              <div class="zone c" style="left:44%;bottom:70px;width:70px;height:60px"></div><span class="tag c" style="left:46%;bottom:132px">02 주의</span>
+              <div class="bollard" style="left:76%"></div><div class="line" style="left:76%"></div>
+              <div class="zone d" style="left:66%;bottom:66px;width:120px;height:96px"></div><span class="tag d" style="left:73%;bottom:140px">03 위험</span>
+            </div>
+          </div>
+          <div class="col" style="flex:1">
+            <div class="small muted">라인 상태 (위험도순)</div>
+            <div class="listitem"><span class="dot d"></span>mooring-03<div class="bar2"><i style="width:89%;background:var(--danger)"></i></div><span>.89</span></div>
+            <div class="listitem"><span class="dot c"></span>mooring-02<div class="bar2"><i style="width:52%;background:var(--caution)"></i></div><span>.52</span></div>
+            <div class="listitem"><span class="dot n"></span>mooring-01<div class="bar2"><i style="width:8%;background:var(--normal)"></i></div><span>.08</span></div>
+            <div class="w" style="height:26px">… 스크롤(가상화)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <h4>레이아웃 (관제 우선)</h4>
+      <ul>
+        <li>얇은 다크 내비 + <span class="k">실시간 연결 상태</span> + 사용자 메뉴(로그아웃).</li>
+        <li><span class="k">위험 배너</span>: DANGER 시 상단 고정, 절제된 위험 톤.</li>
+        <li><span class="k">KPI</span> <code>/v1/dashboard/summary</code> · <span class="k">지도</span> 폴리곤 · <span class="k">라인 레일</span> <code>/v1/lines</code>.</li>
+      </ul>
+      <h4>실시간 · 성능</h4>
+      <ul>
+        <li><span class="badge">데이터</span>최초 REST, 이후 WebSocket <code>line.status.updated / risk.* / snapback.zone.updated / alert.sent</code>.</li>
+        <li><span class="badge perf">성능</span>변경된 라인만 갱신, 지도 SVG, 재접속 백오프, 마지막 상태 캐시.</li>
+        <li><span class="badge a11y">A11y</span>색+아이콘+텍스트 3중 신호(색맹 대응).</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: EVENT DETAIL with three.js -->
+  <h2 class="section">③ 이벤트 상세 — three.js 홋줄 3D (실시간)</h2>
+  <div class="grid withnote">
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>dashboard → 이벤트 상세 오버레이</span></div>
+      <div class="canvas" style="display:flex;gap:0;padding:0">
+        <div style="flex:1;background:var(--paper);padding:16px" class="small muted">…대시보드(뒤, 딤 처리)…</div>
+        <div style="width:52%;border-left:1px solid var(--line);padding:16px;background:#fff">
+          <div class="row" style="justify-content:space-between;align-items:center"><b>mooring-03</b><span class="tag d" style="position:static">위험 · 0.89</span></div>
+          <!-- 3D hero -->
+          <div class="rope3d" style="margin-top:12px">
+            <div class="badge3d">three.js · react-three-fiber · WS 실시간</div>
+            <div class="statechip">DANGER</div>
+            <div class="rope">
+              <div class="strand s1"></div><div class="strand s2"></div><div class="strand s3"></div>
+              <div class="fray" style="top:55px"></div><div class="fray" style="top:80px;transform:rotate(-30deg)"></div><div class="fray" style="top:105px;transform:rotate(20deg)"></div>
+            </div>
+          </div>
+          <div class="states">
+            <div class="s"><b style="color:var(--normal)">NORMAL</b>온전 · 잔잔한 흔들림</div>
+            <div class="s"><b style="color:var(--caution)">CAUTION</b>부분 마모 · 미세 진동</div>
+            <div class="s"><b style="color:var(--danger)">DANGER</b>가닥 파단 · 강한 진동 · 스냅백 방향</div>
+          </div>
+          <div class="w" style="height:44px;margin-top:12px">클래스 확률 바 · 반경 22.2m · 주요 특징값</div>
+          <div class="w solid" style="height:40px;margin-top:10px;background:var(--danger-bg);border-color:var(--danger-line);color:var(--danger-ink)">경보 문구(Bedrock/템플릿)</div>
+          <div class="row" style="margin-top:12px;gap:8px"><span class="pill" style="flex:1;padding:10px">경보 확인(Ack)</span><span class="pill ghost" style="flex:1;padding:10px">닫기</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <h4>three.js 홋줄 3D</h4>
+      <ul>
+        <li>ML mode(NORMAL/CAUTION/DANGER)에 따라 <span class="k">홋줄 상태를 실시간 시각화</span>: 가닥 마모·파단, 진동 강도, 위험 시 스냅백 방향 표시.</li>
+        <li>해당 라인의 WebSocket 업데이트를 구독 → <span class="k">상태 전이 애니메이션</span>.</li>
+        <li>데이터: <code>GET /v1/events/{eventId}</code> + 실시간 <code>risk.*</code>.</li>
+      </ul>
+      <h4>메모</h4>
+      <ul>
+        <li><span class="badge perf">성능</span>three.js는 <span class="k">지연 로딩(코드 스플릿)</span> — 상세 열 때만 로드. 언마운트 시 dispose, DPR 캡, 숨김 시 렌더 루프 정지.</li>
+        <li><span class="badge a11y">A11y</span>3D는 보조 표현 — 상태는 텍스트/배지로도 항상 병기.</li>
+        <li>Ack → <code>POST /v1/events/{id}/ack</code> (낙관적 업데이트).</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: HISTORY -->
+  <h2 class="section">④ 이벤트 이력</h2>
+  <div class="grid withnote">
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>ae-sentinel.app / events</span></div>
+      <div class="canvas">
+        <div class="row" style="align-items:center">
+          <div class="w solid" style="height:36px;width:140px;background:#fff">라인 필터 ▾</div>
+          <div class="w solid" style="height:36px;width:150px;background:#fff">위험도 필터 ▾</div>
+          <div style="flex:1"></div>
+          <div class="w" style="height:36px;width:120px">기간</div>
+        </div>
+        <div class="col" style="margin-top:12px">
+          <div class="listitem" style="gap:16px"><span class="muted">07-08 13:17</span><span class="dot d"></span><b>mooring-03</b><span class="muted">DANGER · 0.89</span><div style="flex:1"></div><span class="muted">미확인</span><span style="color:var(--accent)">상세</span></div>
+          <div class="listitem" style="gap:16px"><span class="muted">07-08 12:40</span><span class="dot c"></span><b>mooring-02</b><span class="muted">CAUTION · 0.52</span><div style="flex:1"></div><span class="muted">확인됨</span><span style="color:var(--accent)">상세</span></div>
+          <div class="w" style="height:30px">… 가상 스크롤 / 페이지네이션</div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <h4>동작</h4>
+      <ul>
+        <li>과거 이벤트 조회: <code>GET /v1/events?lineId&riskLevel&limit</code>. 행 클릭 → ③ 상세.</li>
+        <li><span class="badge perf">성능</span>가상 스크롤/페이지네이션, 필터 디바운스.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- STACK -->
+  <h2 class="section">제안 기술 스택</h2>
+  <div class="card note" style="padding:16px 18px">
+    <ul style="margin:0">
+      <li><span class="k">React + Vite + TypeScript</span>, <span class="k">React Router</span>, TanStack Query(REST) + 커스텀 WebSocket 훅.</li>
+      <li><span class="k">AWS Amplify Auth (Cognito)</span> — 이메일/비번(SRP) + Google 페더레이션(OAuth2 리다이렉트).</li>
+      <li><span class="k">three.js + @react-three/fiber + drei</span> — 이벤트 상세 홋줄 3D (지연 로딩).</li>
+      <li><span class="k">디자인 토큰 CSS</span> — 위 통일 팔레트를 CSS 변수로, Inter 폰트. 무거운 UI 킷 미사용.</li>
+      <li><span class="k">지도</span> — SVG 자체 구현.</li>
+    </ul>
+  </div>
+
+  <!-- DECISIONS -->
+  <h2 class="section">확인 부탁드리는 결정 사항</h2>
+  <div class="decide">
+    <h4>1. 통일 팔레트</h4>
+    <p>무채 웜그레이 지배 + 어시 상태색(세이지/오크/테라코타) + 단일 액센트(<code>#0b5cad</code>, design.md 블루를 살짝 낮춤)로 정돈했습니다. 이 방향 OK? (더 단색화: “위험만 유채색, 정상/주의는 무채+아이콘” 대안도 가능)</p>
+  </div>
+  <div class="decide">
+    <h4>2. 이벤트 상세 three.js 홋줄 3D</h4>
+    <p>상태별 마모·파단·진동·스냅백 방향을 실시간 3D로 표현. 지연 로딩으로 성능 관리. 이 스코프로 진행 OK? (초기엔 단순 형상→점진 고도화 제안)</p>
+  </div>
+  <div class="decide">
+    <h4>3. 로그인 = 이메일/비번 + Google</h4>
+    <p>요청대로 반영. <b>Google 연동을 위해 Google Cloud OAuth 2.0 클라이언트(ID/시크릿) 발급이 필요</b>합니다 — 준비 가능하신가요? 준비 전까지는 이메일/비번만 활성화하고 Google 버튼은 비활성 자리표시로 둘 수 있습니다.</p>
+  </div>
+  <div class="decide">
+    <h4>4. 화면 범위 · 지도</h4>
+    <p>로그인·대시보드·이벤트 상세·이력 4개. 안벽 지도는 도식 SVG(백엔드 <code>layout</code> 좌표), 실제 도면 이미지 있으면 배경으로. 이대로 OK?</p>
+  </div>
+  <p class="muted small" style="margin-top:24px">확인해 주시면: 백엔드 SAM에 Cognito(User Pool + App Client + Hosted UI 도메인 + Google IdP + JWT authorizer) 추가 → React 스캐폴딩 → 인증 → 대시보드 → 이벤트 상세(3D) 순으로 구현합니다.</p>
+</main>
+</body>
+</html>
