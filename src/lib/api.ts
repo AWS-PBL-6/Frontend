@@ -2,7 +2,10 @@ import { fetchAuthSession } from "aws-amplify/auth";
 import { config } from "./config";
 import type {
   AlertRecord,
+  BerthingResult,
+  Bollard,
   DashboardSummary,
+  DepartureResult,
   EventRecord,
   LineLayout,
   LineStatus,
@@ -19,6 +22,7 @@ export interface LineInput {
   riskLevel?: RiskLevel;
   riskScore?: number;
   deviceOnline?: boolean;
+  bollardId?: string | null;
   vesselId?: string | null;
 }
 
@@ -33,6 +37,15 @@ export interface VesselInput {
   lat?: number;
   lon?: number;
   status?: VesselStatus;
+}
+
+export interface BollardInput {
+  bollardId?: string;
+  siteId?: string;
+  berthId?: string;
+  positionM?: number;
+  label?: string;
+  twinSlot?: number | null;
 }
 
 export interface EventInput {
@@ -116,4 +129,19 @@ export const api = {
   updateVessel: (id: string, body: VesselInput) =>
     req<Vessel>("PUT", `/v1/vessels/${encodeURIComponent(id)}`, body),
   deleteVessel: (id: string) => req<DeleteResult>("DELETE", `/v1/vessels/${encodeURIComponent(id)}`),
+
+  // --- berthing workflow (transient vessel<->line association) ---
+  berthVessel: (id: string, body: { berthId?: string; bollardIds?: string[] } = {}) =>
+    req<BerthingResult>("POST", `/v1/vessels/${encodeURIComponent(id)}/berthing`, body),
+  departVessel: (id: string) =>
+    req<DepartureResult>("POST", `/v1/vessels/${encodeURIComponent(id)}/departure`),
+
+  // --- bollards (fixed shore assets carrying the sensors) ---
+  listBollards: () => req<Bollard[]>("GET", "/v1/bollards"),
+  getBollard: (id: string) => req<Bollard>("GET", `/v1/bollards/${encodeURIComponent(id)}`),
+  createBollard: (body: BollardInput) => req<Bollard>("POST", "/v1/bollards", body),
+  updateBollard: (id: string, body: BollardInput) =>
+    req<Bollard>("PUT", `/v1/bollards/${encodeURIComponent(id)}`, body),
+  deleteBollard: (id: string) =>
+    req<DeleteResult>("DELETE", `/v1/bollards/${encodeURIComponent(id)}`),
 };

@@ -20,10 +20,7 @@ export function TopNav({ connected, email, onSignOut }: Props) {
           이벤트
         </NavLink>
         <NavLink to="/vessels" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-          선박 관리
-        </NavLink>
-        <NavLink to="/lines" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-          라인 관리
+          선박 · 계류삭
         </NavLink>
       </div>
       <div className="nav-right">

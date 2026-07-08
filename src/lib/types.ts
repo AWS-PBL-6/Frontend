@@ -15,7 +15,20 @@ export interface LineStatus {
   lastEventId?: string | null;
   snapbackZone?: SnapbackZone | null;
   deviceOnline: boolean;
-  vesselId?: string | null;
+  bollardId?: string | null; // permanent home bollard of this sensor
+  vesselId?: string | null; // transient: vessel moored on this line right now
+}
+
+/** Fixed quay-side bollard carrying an AE sensor (shore asset). */
+export interface Bollard {
+  bollardId: string;
+  siteId: string;
+  berthId: string;
+  positionM: number;
+  label?: string | null;
+  twinSlot?: number | null; // bound digital-twin post number (1-based)
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type VesselStatus = "BERTHED" | "APPROACHING" | "DEPARTED";
@@ -76,8 +89,21 @@ export interface DashboardSummary {
   totalEvents: number;
   totalAlerts: number;
   totalVessels?: number;
+  totalBollards?: number;
   generatedAt: string;
   recentEvents: EventRecord[];
+}
+
+/** Result of the berthing workflow (POST /v1/vessels/{id}/berthing). */
+export interface BerthingResult {
+  vessel: Vessel;
+  attachedLineIds: string[];
+}
+
+/** Result of the departure workflow (POST /v1/vessels/{id}/departure). */
+export interface DepartureResult {
+  vessel: Vessel;
+  releasedLineIds: string[];
 }
 
 /** ws-risk-message.v1 */
@@ -107,6 +133,7 @@ export interface WsMessage {
 export interface LiveData {
   lines: LineStatus[];
   vessels: Vessel[];
+  bollards: Bollard[];
   summary: DashboardSummary | null;
   loaded: boolean;
   error: string | null;

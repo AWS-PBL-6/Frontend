@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "./lib/amplify";
-import "leaflet/dist/leaflet.css";
 import "./styles.css";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthProvider";

@@ -1,47 +1,70 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./Modal";
 import { api, type LineInput } from "../lib/api";
-import type { LineStatus, RiskLevel, Vessel } from "../lib/types";
+import type { Bollard, LineStatus, RiskLevel, Vessel } from "../lib/types";
+
+const MAX_LINES_PER_BOLLARD = 2;
 
 export function LineForm({
   existing,
+  presetVesselId,
   onClose,
   onSaved,
 }: {
   existing?: LineStatus | null;
+  presetVesselId?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const edit = !!existing;
   const [lineId, setLineId] = useState(existing?.lineId ?? "");
-  const [siteId, setSiteId] = useState(existing?.siteId ?? "yard-a");
-  const [berthId, setBerthId] = useState(existing?.berthId ?? "berth-01");
-  const [anchorX, setAnchorX] = useState(existing?.layout.anchorX ?? 150);
-  const [anchorY, setAnchorY] = useState(existing?.layout.anchorY ?? 100);
-  const [headingDeg, setHeadingDeg] = useState(existing?.layout.headingDeg ?? 130);
   const [riskLevel, setRiskLevel] = useState<RiskLevel>(existing?.riskLevel ?? "NORMAL");
-  const [vesselId, setVesselId] = useState(existing?.vesselId ?? "");
+  const [bollardId, setBollardId] = useState(existing?.bollardId ?? "");
+  const [vesselId, setVesselId] = useState(existing?.vesselId ?? presetVesselId ?? "");
+  const [bollards, setBollards] = useState<Bollard[]>([]);
   const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [lines, setLines] = useState<LineStatus[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    api.listBollards().then(setBollards).catch(() => setBollards([]));
     api.listVessels().then(setVessels).catch(() => setVessels([]));
+    api.listLines().then(setLines).catch(() => setLines([]));
   }, []);
+
+  // How many lines already occupy each bollard (excluding the line being edited).
+  const countByBollard = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const l of lines) {
+      if (!l.bollardId || (existing && l.lineId === existing.lineId)) continue;
+      m[l.bollardId] = (m[l.bollardId] ?? 0) + 1;
+    }
+    return m;
+  }, [lines, existing]);
+
+  // A line is fixed to its bollard, so Site/Berth are inherited from it.
+  const selectedBollard = useMemo(
+    () => bollards.find((b) => b.bollardId === bollardId) ?? null,
+    [bollards, bollardId],
+  );
+  const derivedSite = selectedBollard?.siteId ?? existing?.siteId ?? "yard-a";
+  const derivedBerth = selectedBollard?.berthId ?? existing?.berthId ?? "berth-01";
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     const body: LineInput = {
-      siteId,
-      berthId,
-      layout: { anchorX: Number(anchorX), anchorY: Number(anchorY), headingDeg: Number(headingDeg) },
+      siteId: derivedSite,
+      berthId: derivedBerth,
       riskLevel,
+      bollardId: bollardId || null,
       vesselId: vesselId || null,
     };
     try {
       if (edit && existing) await api.updateLine(existing.lineId, body);
-      else await api.createLine({ ...body, lineId });
+      // lineId is optional — omit it entirely so the backend auto-generates one.
+      else await api.createLine(lineId.trim() ? { ...body, lineId: lineId.trim() } : body);
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
@@ -59,7 +82,7 @@ export function LineForm({
           <button
             className="btn btn-accent"
             style={{ flex: 1 }}
-            disabled={busy || (!edit && !lineId)}
+            disabled={busy}
             onClick={submit}
           >
             {busy ? "저장 중…" : "저장"}
@@ -72,67 +95,64 @@ export function LineForm({
     >
       {error && <div className="alert-msg">{error}</div>}
       <div className="field-light">
-        <label>라인 ID</label>
+        <label>라인 ID {edit ? "" : "(선택)"}</label>
         <input
           className="input-light"
           value={lineId}
           disabled={edit}
           onChange={(e) => setLineId(e.target.value)}
-          placeholder="mooring-05"
+          placeholder={edit ? "" : "미입력 시 자동 생성 (mooring-…)"}
         />
       </div>
-      <div className="form-row">
-        <div className="field-light">
-          <label>Site</label>
-          <input className="input-light" value={siteId} onChange={(e) => setSiteId(e.target.value)} />
-        </div>
-        <div className="field-light">
-          <label>Berth</label>
-          <input className="input-light" value={berthId} onChange={(e) => setBerthId(e.target.value)} />
-        </div>
-      </div>
-      <div className="form-row">
-        <div className="field-light">
-          <label>anchorX</label>
-          <input className="input-light" type="number" value={anchorX} onChange={(e) => setAnchorX(Number(e.target.value))} />
-        </div>
-        <div className="field-light">
-          <label>anchorY</label>
-          <input className="input-light" type="number" value={anchorY} onChange={(e) => setAnchorY(Number(e.target.value))} />
-        </div>
-        <div className="field-light">
-          <label>heading°</label>
-          <input className="input-light" type="number" value={headingDeg} onChange={(e) => setHeadingDeg(Number(e.target.value))} />
-        </div>
-      </div>
-      <div className="form-row">
-        <div className="field-light">
-          <label>위험도</label>
-          <select
-            className="select-light"
-            value={riskLevel}
-            onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}
-          >
-            <option value="NORMAL">정상</option>
-            <option value="CAUTION">주의</option>
-            <option value="DANGER">위험</option>
-          </select>
-        </div>
-        <div className="field-light">
-          <label>소속 선박 (센서 부착)</label>
-          <select
-            className="select-light"
-            value={vesselId}
-            onChange={(e) => setVesselId(e.target.value)}
-          >
-            <option value="">— 미지정 —</option>
-            {vessels.map((v) => (
-              <option key={v.vesselId} value={v.vesselId}>
-                {v.name} ({v.vesselId})
+      <div className="field-light">
+        <label>소속 볼라드 (센서 위치·고정)</label>
+        <select
+          className="select-light"
+          value={bollardId}
+          onChange={(e) => setBollardId(e.target.value)}
+        >
+          <option value="">— 미지정 —</option>
+          {bollards.map((b) => {
+            const count = countByBollard[b.bollardId] ?? 0;
+            const full = count >= MAX_LINES_PER_BOLLARD && b.bollardId !== bollardId;
+            return (
+              <option key={b.bollardId} value={b.bollardId} disabled={full}>
+                {(b.label || b.bollardId)} · {b.berthId} · {count}/{MAX_LINES_PER_BOLLARD}
+                {full ? " 만석" : ""}
               </option>
-            ))}
-          </select>
-        </div>
+            );
+          })}
+        </select>
+        <span className="muted" style={{ fontSize: 11 }}>
+          선석/사이트는 볼라드에서 자동: <b>{derivedBerth}</b> · {derivedSite}
+        </span>
+      </div>
+      <div className="field-light">
+        <label>위험도</label>
+        <select
+          className="select-light"
+          value={riskLevel}
+          onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}
+        >
+          <option value="NORMAL">정상</option>
+          <option value="CAUTION">주의</option>
+          <option value="DANGER">위험</option>
+        </select>
+      </div>
+      <div className="field-light">
+        <label>계선 선박 (접안 세션 · 보통 접안/출항으로 자동 설정)</label>
+        <select
+          className="select-light"
+          value={vesselId}
+          onChange={(e) => setVesselId(e.target.value)}
+        >
+          <option value="">— 미계선 —</option>
+          {vessels.map((v) => (
+            <option key={v.vesselId} value={v.vesselId}>
+              {v.name} ({v.vesselId})
+            </option>
+          ))}
+        </select>
       </div>
     </Modal>
   );
