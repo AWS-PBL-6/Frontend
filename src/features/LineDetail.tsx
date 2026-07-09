@@ -1,15 +1,22 @@
-import { Suspense, lazy } from "react";
-import type { LineStatus, RiskLevel } from "../lib/types";
+import { Suspense, lazy, useEffect, useState } from "react";
+import type { EventRecord, LineStatus, RiskLevel } from "../lib/types";
 import { effectiveRisk } from "../twin/palette";
-import { acousticReading, DAMAGE_LABEL, DAMAGE_RISK } from "../lib/acoustic";
+import { api } from "../lib/api";
+import {
+  fromEvent,
+  syntheticReading,
+  SIGNAL_LABEL,
+  SIGNAL_RISK,
+  type AeReading,
+} from "../lib/acoustic";
 
 const RopeScene = lazy(() => import("./RopeScene"));
 
 const RISK_LABEL: Record<RiskLevel, string> = { NORMAL: "정상", CAUTION: "주의", DANGER: "위험" };
 
-/** Live mooring-line status window: current risk + 3D rope, works with or
- *  without an ML event. Opens for any line click. When the line has a
- *  ``lastEventId`` it offers the full ML event analysis (EventDetail). */
+/** Live mooring-line status window: current risk + 3D rope + AE metrics.
+ *  A moored line with a ``lastEventId`` shows the real ML event's features
+ *  (fetched); demo/backendless lines fall back to a synthetic reading. */
 export function LineDetail({
   line,
   vesselName,
@@ -25,9 +32,25 @@ export function LineDetail({
 }) {
   const risk = effectiveRisk(line);
   const score = line.vesselId ? line.riskScore : 0;
-  // Detailed AE metrics only for a mapped (moored) line — the sensor reads a
-  // load only while a vessel is made fast to its bollard.
-  const ae = line.vesselId ? acousticReading(line) : null;
+
+  // Real ML event features when the moored line has one; else synthetic.
+  const [event, setEvent] = useState<EventRecord | null>(null);
+  useEffect(() => {
+    setEvent(null);
+    if (!line.vesselId || !line.lastEventId) return;
+    let alive = true;
+    api.getEvent(line.lastEventId).then((e) => alive && setEvent(e)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [line.lineId, line.vesselId, line.lastEventId]);
+
+  const ae: AeReading | null = !line.vesselId
+    ? null
+    : event
+      ? fromEvent(event)
+      : syntheticReading(line);
+  const sigRisk = ae ? SIGNAL_RISK[ae.signalType] ?? "NORMAL" : "NORMAL";
 
   return (
     <>
@@ -80,29 +103,36 @@ export function LineDetail({
 
           {ae && (
             <div>
-              <div className="section-label">초음파(AE) 센서 분석 · AE-Damage-Detection</div>
+              <div className="section-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                음향 방출(AE) 이벤트 분석
+                <span
+                  className="badge"
+                  style={{ fontSize: 10, color: ae.live ? "var(--normal)" : "var(--muted)" }}
+                >
+                  {ae.live ? "실시간" : "합성(데모)"}
+                </span>
+              </div>
               <div
                 className="card"
                 style={{ padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}
               >
-                <span className={`badge badge--${DAMAGE_RISK[ae.damageType]}`}>
-                  <span className={`dot dot--${DAMAGE_RISK[ae.damageType]}`} />
-                  손상 {ae.damageType}
+                <span className={`badge badge--${sigRisk}`}>
+                  <span className={`dot dot--${sigRisk}`} />
+                  {SIGNAL_LABEL[ae.signalType] ?? ae.signalType}
                 </span>
-                <b style={{ flex: 1 }}>{DAMAGE_LABEL[ae.damageType]}</b>
-                <span className="muted">신뢰도 {(ae.confidence * 100).toFixed(0)}%</span>
+                <b style={{ flex: 1 }}>수신 {ae.amplitudeDbAe} dB · SNR {ae.snrDb} dB</b>
+                <span className="muted">충격 {ae.hitCount}회</span>
               </div>
               <div className="kv">
-                <div><span>최대 진폭</span><b>{ae.peakAmplitudeDb} dB</b></div>
-                <div><span>방출 에너지</span><b>{ae.energyReleaseJ} J</b></div>
-                <div><span>신호 지속시간</span><b>{ae.signalDurationMs} ms</b></div>
-                <div><span>상승 시간</span><b>{ae.riseTimeMs} ms</b></div>
-                <div><span>주파수 스펙트럼</span><b>{ae.frequencyHz} Hz</b></div>
-                <div><span>충격 에너지</span><b>{ae.impactEnergyJ} J</b></div>
-                <div><span>온도</span><b>{ae.temperatureC} °C</b></div>
-                <div><span>습도</span><b>{ae.humidityPct} %</b></div>
-                <div><span>섬유 / 수지</span><b>{ae.fiberType} / {ae.resinType}</b></div>
-                <div><span>두께</span><b>{ae.thicknessMm} mm</b></div>
+                <div><span>수신 진폭</span><b>{ae.amplitudeDbAe} dB</b></div>
+                <div><span>신호대잡음(SNR)</span><b>{ae.snrDb} dB</b></div>
+                <div><span>충격 횟수</span><b>{ae.hitCount} 회</b></div>
+                <div><span>신호 지속시간</span><b>{ae.durationMs} ms</b></div>
+                <div><span>주파수 대역</span><b>{ae.freqLowKhz}–{ae.freqHighKhz} kHz</b></div>
+                <div><span>배경 소음</span><b>{ae.ambientNoiseDb} dB</b></div>
+                <div><span>강우</span><b>{ae.rainMmh} mm/h</b></div>
+                <div><span>풍속</span><b>{ae.windMps} m/s</b></div>
+                <div><span>크레인</span><b>{ae.craneActive ? "가동" : "정지"}</b></div>
               </div>
             </div>
           )}

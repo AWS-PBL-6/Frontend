@@ -1,50 +1,51 @@
-import type { LineStatus, RiskLevel } from "./types";
+import type { EventRecord, LineStatus, RiskLevel } from "./types";
 
 /**
- * Synthetic acoustic-emission (AE) reading for a mooring line.
+ * Port-domain acoustic-emission (AE) reading for a mooring line — the v2
+ * per-event schema (ae-feature-event.v2): amplitudeDbAe, snrDb, hitCount,
+ * durationMs, freq band, signalType + environment covariates.
  *
- * The live sensor/ML pipeline (AE-Damage-Detection) is not yet wired end to
- * end, so for the PoC we surface a *deterministic* reading per line whose
- * feature schema mirrors the training dataset (AE-Damage-Detection-Dataset).
- * Values are seeded by lineId — stable across renders — and biased by the
- * line's effective risk so a DANGER line reads as a genuine damage event.
- *
- * Dataset columns → fields:
- *   Peak_Amplitude_dB, Energy_Release_J, Signal_Duration_ms, Rise_Time_ms,
- *   Frequency_Spectrum_Hz, Impact_Energy_J, Temperature_C, Humidity_%,
- *   Fiber_Type, Resin_Type, Thickness_mm, Damage_Type (0..3).
+ * Live lines carry a real ML event (via ``lastEventId``); ``fromEvent`` maps
+ * that event's features/context onto this shape. Demo lines have no event, so
+ * ``syntheticReading`` produces a deterministic seed-stable reading biased by
+ * the line's severity.
  */
-export interface AcousticReading {
-  peakAmplitudeDb: number;
-  energyReleaseJ: number;
-  signalDurationMs: number;
-  riseTimeMs: number;
-  frequencyHz: number;
-  impactEnergyJ: number;
-  temperatureC: number;
-  humidityPct: number;
-  fiberType: "Carbon" | "Glass";
-  resinType: "Epoxy" | "Polyester";
-  thicknessMm: number;
-  damageType: 0 | 1 | 2 | 3;
-  /** 0..1 model-style confidence for the damage classification. */
-  confidence: number;
+export interface AeReading {
+  amplitudeDbAe: number;
+  snrDb: number;
+  hitCount: number;
+  durationMs: number;
+  freqLowKhz: number;
+  freqHighKhz: number;
+  signalType: string;
+  ambientNoiseDb: number;
+  rainMmh: number;
+  windMps: number;
+  craneActive: boolean;
+  /** true = 실제 ML 이벤트 특징량, false = 데모 합성값 */
+  live: boolean;
 }
 
-/** Damage_Type label (dataset class → Korean / English). */
-export const DAMAGE_LABEL: Record<number, string> = {
-  0: "정상 (No Damage)",
-  1: "매트릭스 균열 (Matrix Cracking)",
-  2: "섬유 파단 (Fiber Breakage)",
-  3: "층간 분리 (Delamination)",
+export const SIGNAL_TYPES = [
+  "Low amplitude",
+  "Low to high frequency",
+  "Medium amplitude",
+  "High amplitude",
+] as const;
+
+export const SIGNAL_LABEL: Record<string, string> = {
+  "Low amplitude": "저진폭 (Low)",
+  "Low to high frequency": "저-고주파 (LHF)",
+  "Medium amplitude": "중진폭 (Medium)",
+  "High amplitude": "고진폭 (High)",
 };
 
-/** Damage_Type → risk colour class (reuse the NORMAL/CAUTION/DANGER palette). */
-export const DAMAGE_RISK: Record<number, RiskLevel> = {
-  0: "NORMAL",
-  1: "CAUTION",
-  2: "DANGER",
-  3: "DANGER",
+/** Signal type → risk colour class (High = 파단 임박). */
+export const SIGNAL_RISK: Record<string, RiskLevel> = {
+  "Low amplitude": "NORMAL",
+  "Low to high frequency": "CAUTION",
+  "Medium amplitude": "CAUTION",
+  "High amplitude": "DANGER",
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -52,6 +53,8 @@ const round = (v: number, d = 0) => {
   const p = 10 ** d;
   return Math.round(v * p) / p;
 };
+const num = (v: unknown, fallback = 0): number =>
+  typeof v === "number" && Number.isFinite(v) ? v : fallback;
 
 function hashStr(s: string): number {
   let h = 2166136261 >>> 0;
@@ -62,7 +65,6 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-/** Small deterministic PRNG (mulberry32) so readings are stable per seed. */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -73,39 +75,51 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** Effective risk of a line: an unmoored line (no vessel) is always NORMAL. */
 function effLevel(line: LineStatus): RiskLevel {
   return line.vesselId ? line.riskLevel : "NORMAL";
 }
 
-/**
- * Deterministic AE reading for a line. Environmental fields (temp/humidity)
- * and material fields (fiber/resin/thickness) are seed-stable; the acoustic
- * fields and damage class scale with the line's severity.
- */
-export function acousticReading(line: LineStatus): AcousticReading {
+/** Map a real ML event's features/context onto the AE reading shape. */
+export function fromEvent(event: EventRecord): AeReading {
+  const f = event.features as Record<string, unknown>;
+  const c = event.context as Record<string, unknown>;
+  const signal = typeof f.signalType === "string" ? f.signalType : "Low amplitude";
+  return {
+    amplitudeDbAe: round(num(f.amplitudeDbAe), 1),
+    snrDb: round(num(f.snrDb), 1),
+    hitCount: Math.round(num(f.hitCount)),
+    durationMs: round(num(f.durationMs), 2),
+    freqLowKhz: round(num(f.freqLowKhz), 1),
+    freqHighKhz: round(num(f.freqHighKhz), 1),
+    signalType: signal,
+    ambientNoiseDb: round(num(c.ambientNoiseDb), 1),
+    rainMmh: round(num(c.rainMmh), 1),
+    windMps: round(num(c.windMps), 1),
+    craneActive: num(c.craneActive) >= 1,
+    live: true,
+  };
+}
+
+/** Deterministic demo reading (no backend event). Scales with line severity. */
+export function syntheticReading(line: LineStatus): AeReading {
   const rand = mulberry32(hashStr(line.lineId));
   const level = effLevel(line);
-  const base = level === "DANGER" ? 0.82 : level === "CAUTION" ? 0.5 : 0.16;
-  // Blend the level floor with the live risk score, plus a little seed jitter.
-  const sev = clamp(base * 0.62 + (line.vesselId ? line.riskScore : 0) * 0.38 + (rand() - 0.5) * 0.08, 0, 1);
-
-  const damageType: 0 | 1 | 2 | 3 =
-    level === "NORMAL" ? 0 : level === "CAUTION" ? 1 : rand() < 0.5 ? 2 : 3;
-
+  const base = level === "DANGER" ? 0.85 : level === "CAUTION" ? 0.55 : 0.15;
+  const sev = clamp(base * 0.6 + (line.vesselId ? line.riskScore : 0) * 0.4 + (rand() - 0.5) * 0.08, 0, 1);
+  const signalType =
+    level === "DANGER" ? "High amplitude" : level === "CAUTION" ? "Medium amplitude" : "Low amplitude";
   return {
-    peakAmplitudeDb: round(clamp(44 + sev * 44 + (rand() - 0.5) * 5, 40, 92), 1),
-    energyReleaseJ: round(clamp(0.2 + sev * 9.2 + (rand() - 0.5) * 0.6, 0.05, 10), 2),
-    signalDurationMs: round(clamp(0.6 + sev * 4 + (rand() - 0.5) * 0.4, 0.4, 5), 2),
-    riseTimeMs: round(clamp(0.2 + sev * 1.6 + (rand() - 0.5) * 0.2, 0.1, 2), 2),
-    frequencyHz: round(clamp(150 + sev * 300 + (rand() - 0.5) * 60, 90, 520)),
-    impactEnergyJ: round(clamp(6 + sev * 40 + (rand() - 0.5) * 6, 4, 50), 1),
-    temperatureC: round(15 + rand() * 23, 1),
-    humidityPct: round(25 + rand() * 53),
-    fiberType: rand() < 0.6 ? "Carbon" : "Glass",
-    resinType: rand() < 0.6 ? "Epoxy" : "Polyester",
-    thicknessMm: round(3 + rand() * 6, 1),
-    damageType,
-    confidence: round(clamp(0.72 + sev * 0.24 + (rand() - 0.5) * 0.06, 0.5, 0.99), 2),
+    amplitudeDbAe: round(clamp(50 + sev * 46 + (rand() - 0.5) * 4, 40, 100), 1),
+    snrDb: round(clamp(10 + sev * 36 + (rand() - 0.5) * 4, 6, 50), 1),
+    hitCount: Math.round(clamp(1 + sev * 34 + (rand() - 0.5) * 4, 1, 51)),
+    durationMs: round(clamp(0.6 + sev * 4.5 + (rand() - 0.5) * 0.4, 0.3, 6), 2),
+    freqLowKhz: 20,
+    freqHighKhz: round(clamp(40 + sev * 150 + (rand() - 0.5) * 20, 30, 200), 1),
+    signalType,
+    ambientNoiseDb: round(clamp(32 + rand() * 18, 28, 64), 1),
+    rainMmh: rand() < 0.7 ? 0 : round(rand() * 12, 1),
+    windMps: round(2 + rand() * 8, 1),
+    craneActive: rand() < 0.35,
+    live: false,
   };
 }
