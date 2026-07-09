@@ -43,6 +43,9 @@ export function LineForm({
     return m;
   }, [lines, existing]);
 
+  // A moored line's bollard is locked (backend LINE_MOORED guard).
+  const moored = !!existing?.vesselId;
+
   // A line is fixed to its bollard, so Site/Berth are inherited from it.
   const selectedBollard = useMemo(
     () => bollards.find((b) => b.bollardId === bollardId) ?? null,
@@ -109,22 +112,27 @@ export function LineForm({
         <select
           className="select-light"
           value={bollardId}
+          disabled={moored}
           onChange={(e) => setBollardId(e.target.value)}
         >
           <option value="">— 미지정 —</option>
           {bollards.map((b) => {
             const count = countByBollard[b.bollardId] ?? 0;
             const full = count >= MAX_LINES_PER_BOLLARD && b.bollardId !== bollardId;
+            const pending = b.sensorMode === "PENDING";
             return (
-              <option key={b.bollardId} value={b.bollardId} disabled={full}>
+              <option key={b.bollardId} value={b.bollardId} disabled={full || pending}>
                 {(b.label || b.bollardId)} · {b.berthId} · {count}/{MAX_LINES_PER_BOLLARD}
                 {full ? " 만석" : ""}
+                {pending ? " · 센서 미연동" : b.sensorMode === "VIRTUAL" ? " · 가상" : ""}
               </option>
             );
           })}
         </select>
         <span className="muted" style={{ fontSize: 11 }}>
-          선석/사이트는 볼라드에서 자동: <b>{derivedBerth}</b> · {derivedSite}
+          {moored
+            ? "계선 중에는 볼라드를 변경할 수 없습니다 (출항 처리 먼저)."
+            : <>선석/사이트는 볼라드에서 자동: <b>{derivedBerth}</b> · {derivedSite}</>}
         </span>
       </div>
       <div className="field-light">

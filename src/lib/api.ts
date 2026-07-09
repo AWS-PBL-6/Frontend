@@ -10,6 +10,7 @@ import type {
   LineLayout,
   LineStatus,
   RiskLevel,
+  SensorMode,
   Vessel,
   VesselStatus,
 } from "./types";
@@ -46,6 +47,14 @@ export interface BollardInput {
   positionM?: number;
   label?: string;
   twinSlot?: number | null;
+  /** 생성 시 즉시 1회 연동 (생략 시 PENDING — 이후 provisionBollard 로 연동) */
+  sensorMode?: SensorMode;
+  sensorId?: string;
+}
+
+export interface SensorBindingInput {
+  sensorMode: "DEVICE" | "VIRTUAL";
+  sensorId?: string;
 }
 
 export interface EventInput {
@@ -144,4 +153,7 @@ export const api = {
     req<Bollard>("PUT", `/v1/bollards/${encodeURIComponent(id)}`, body),
   deleteBollard: (id: string) =>
     req<DeleteResult>("DELETE", `/v1/bollards/${encodeURIComponent(id)}`),
+  /** 첫 1회 센서 연동 (PENDING→DEVICE|VIRTUAL, 이후 VIRTUAL→DEVICE 만 허용). */
+  provisionBollard: (id: string, body: SensorBindingInput) =>
+    req<Bollard>("POST", `/v1/bollards/${encodeURIComponent(id)}/sensor`, body),
 };

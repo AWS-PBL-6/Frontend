@@ -540,3 +540,27 @@ button { font-family: inherit; }
   .twin-panel { width: min(300px, calc(100vw - 28px)); }
   .twin-kpis { display: none; }
 }
+
+/* ── 볼라드 센서 연동 (1회 온보딩) ───────────────────────────────────────── */
+.sensor-card {
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 12px 14px; background: var(--white);
+}
+.sensor-card--PENDING { border-color: var(--caution); background: #fdf6e7; }
+.sensor-card--VIRTUAL { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.sensor-card--DEVICE { border-color: color-mix(in srgb, var(--normal) 45%, var(--line)); }
+.sensor-card-head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.sensor-card-head b { flex: none; }
+.sensor-card-meta { color: var(--muted); font-size: 12px; }
+.sensor-card-desc { margin: 6px 0 0; font-size: 12px; color: var(--graphite); line-height: 1.45; }
+
+.sensor-choice { display: flex; flex-direction: column; gap: 6px; }
+.sensor-choice-item {
+  display: flex; align-items: flex-start; gap: 9px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 8px 10px; cursor: pointer; background: var(--white);
+}
+.sensor-choice-item--on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.sensor-choice-item input { margin-top: 3px; }
+.sensor-choice-item b { display: block; font-size: 13px; }
+.sensor-choice-item em { font-style: normal; font-size: 11.5px; color: var(--muted); }

@@ -59,7 +59,8 @@ const SEEDS: Seed[] = [
 const levelOf = (score: number): RiskLevel =>
   score >= 0.7 ? "DANGER" : score >= 0.45 ? "CAUTION" : "NORMAL";
 
-// Fixed shore bollards behind the demo lines (permanent assets).
+// Fixed shore bollards behind the demo lines (permanent assets). The demo
+// itself IS the simulation, so every bollard runs in VIRTUAL sensor mode.
 const BOLLARDS: Bollard[] = Array.from(new Set(SEEDS.map((s) => s.bollardId))).map((id, i) => ({
   bollardId: id,
   siteId: "busan",
@@ -67,6 +68,9 @@ const BOLLARDS: Bollard[] = Array.from(new Set(SEEDS.map((s) => s.bollardId))).m
   positionM: i * 20,
   label: id,
   twinSlot: null,
+  sensorMode: "VIRTUAL" as const,
+  sensorId: null,
+  sensorBoundAt: now(),
   createdAt: now(),
   updatedAt: now(),
 }));

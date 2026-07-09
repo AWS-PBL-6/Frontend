@@ -24,6 +24,14 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
   const [focus, setFocus] = useState<FocusHandle | null>(null);
   const focusSeq = useRef(0);
 
+  // 시연·테스트용 시각 고정: ?tod=13.5 처럼 시각(0–24h)을 지정하면 낮/밤
+  // 상태를 그 시각으로 고정한다. 미지정 시 실제 현재 시각을 따라간다.
+  const hourOverride = useMemo(() => {
+    const v = new URLSearchParams(window.location.search).get("tod");
+    const n = v ? Number(v) : NaN;
+    return Number.isFinite(n) ? ((n % 24) + 24) % 24 : undefined;
+  }, []);
+
   // 1 Hz HUD clock — drives 시계, ETA labels and approach sub-lines.
   const epoch = useMemo(() => Date.now(), []);
   const [nowSec, setNowSec] = useState(0);
@@ -134,6 +142,7 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
         selectedBollardId={selectedBollardId}
         nowSec={nowSec}
         focus={focus}
+        hourOverride={hourOverride}
         onSelectVessel={focusVessel}
         onSelectLine={openLine}
         onSelectBollard={(id) => {

@@ -1,11 +1,13 @@
 import { CatmullRomCurve3, Vector3 } from "three";
-import type { Bollard, LineStatus, Vessel } from "../lib/types";
+import type { Bollard, LineStatus, SensorMode, Vessel } from "../lib/types";
 
 /* World scale: 1 unit = 1 metre. Waterline at y=0. The quay runs along the
  * X axis with its edge at z=0; the sea occupies z>0, the yard/city z<0. */
 export const QUAY_TOP = 3; // quay deck height above the waterline
 export const QUAY_DEPTH = 260; // quay apron depth (edge → yard)
-export const BOLLARD_SPACING = 34; // metres between adjacent quay posts
+// Wide enough that each ship's bollard cluster spans its hull — keeps the
+// anti-overlap pass from dragging hulls away from their own bollards.
+export const BOLLARD_SPACING = 60; // metres between adjacent quay posts
 export const BOLLARD_Z = -2; // bollard row, 2 m in from the quay edge
 const FENDER_GAP = 2.5; // hull stand-off from the quay wall
 const QUAY_MARGIN = 140; // quay extends past the outermost ship
@@ -24,6 +26,7 @@ export interface BollardSpot {
   x: number;
   label: string;
   bollardId: string | null; // real managed bollard id (null for derived fallback)
+  sensorMode: SensorMode | null; // null for derived fallback posts
 }
 
 export interface ShipPlacement extends ShipDims {
@@ -94,27 +97,57 @@ export function computeTwinLayout(
     .filter((v) => v.status === "APPROACHING")
     .sort((a, b) => a.vesselId.localeCompare(b.vesselId));
 
-  // ── quay posts = the real bollards, ordered by berth then quay position ──
+  // ── quay posts = the real bollards. A bollard with ``twinSlot`` is pinned
+  //    to that post number (1-based); the rest fill the remaining slots in
+  //    (berth, quay-position) order. ──────────────────────────────────────
   const sortedBollards = [...realBollards].sort(
     (a, b) =>
       a.berthId.localeCompare(b.berthId) ||
       a.positionM - b.positionM ||
       a.bollardId.localeCompare(b.bollardId),
   );
-  const bollards: BollardSpot[] =
-    sortedBollards.length > 0
-      ? sortedBollards.map((b, i) => ({
-          id: b.bollardId,
-          x: (i - (sortedBollards.length - 1) / 2) * BOLLARD_SPACING,
-          label: b.label || b.bollardId,
-          bollardId: b.bollardId,
-        }))
-      : Array.from({ length: 16 }, (_, i) => ({
-          id: `B-${String(i + 1).padStart(2, "0")}`,
-          x: (i - 7.5) * BOLLARD_SPACING,
-          label: `B-${String(i + 1).padStart(2, "0")}`,
-          bollardId: null as string | null,
-        }));
+  let bollards: BollardSpot[];
+  if (sortedBollards.length > 0) {
+    const pinned = new Map<number, Bollard>(); // slot index (0-based) → bollard
+    const rest: Bollard[] = [];
+    for (const b of sortedBollards) {
+      const slot = b.twinSlot != null && b.twinSlot >= 1 ? b.twinSlot - 1 : null;
+      if (slot != null && !pinned.has(slot)) pinned.set(slot, b);
+      else rest.push(b);
+    }
+    const totalSlots = Math.max(
+      sortedBollards.length,
+      ...[...pinned.keys()].map((s) => s + 1),
+    );
+    const slotted: (Bollard | undefined)[] = Array.from({ length: totalSlots });
+    for (const [slot, b] of pinned) slotted[slot] = b;
+    let cursor = 0;
+    for (const b of rest) {
+      while (slotted[cursor] !== undefined) cursor++;
+      slotted[cursor] = b;
+    }
+    bollards = slotted.flatMap((b, i) =>
+      b
+        ? [
+            {
+              id: b.bollardId,
+              x: (i - (totalSlots - 1) / 2) * BOLLARD_SPACING,
+              label: b.label || b.bollardId,
+              bollardId: b.bollardId,
+              sensorMode: b.sensorMode,
+            },
+          ]
+        : [],
+    );
+  } else {
+    bollards = Array.from({ length: 16 }, (_, i) => ({
+      id: `B-${String(i + 1).padStart(2, "0")}`,
+      x: (i - 7.5) * BOLLARD_SPACING,
+      label: `B-${String(i + 1).padStart(2, "0")}`,
+      bollardId: null as string | null,
+      sensorMode: null as SensorMode | null,
+    }));
+  }
   const postByBollardId = new Map<string, BollardSpot>();
   for (const p of bollards) if (p.bollardId) postByBollardId.set(p.bollardId, p);
 
@@ -161,12 +194,19 @@ export function computeTwinLayout(
   }
 
   // ── mooring ropes: fan along the hull to each line's bollard post ───────
+  // HUD/scene labels prefer the post label (B-01) over the raw bollard id.
   const moorings: MooringPlacement[] = [];
   const bollardByLine: Record<string, string> = {};
-  for (const l of lines) if (l.bollardId) bollardByLine[l.lineId] = l.bollardId;
+  for (const l of lines) {
+    if (!l.bollardId) continue;
+    bollardByLine[l.lineId] = postByBollardId.get(l.bollardId)?.label ?? l.bollardId;
+  }
   for (const ship of ships) {
-    const vlines = (linesByVessel.get(ship.vessel.vesselId) ?? []).sort((a, b) =>
-      a.lineId.localeCompare(b.lineId),
+    // Order fairleads by each line's bollard position so ropes never cross.
+    const postX = (l: LineStatus) =>
+      (l.bollardId ? postByBollardId.get(l.bollardId)?.x : undefined) ?? 0;
+    const vlines = (linesByVessel.get(ship.vessel.vesselId) ?? []).sort(
+      (a, b) => postX(a) - postX(b) || a.lineId.localeCompare(b.lineId),
     );
     const n = vlines.length;
     vlines.forEach((line, i) => {

@@ -19,6 +19,10 @@ export interface LineStatus {
   vesselId?: string | null; // transient: vessel moored on this line right now
 }
 
+/** One-time sensor onboarding state of a bollard:
+ *  PENDING(미연동) → DEVICE(실센서) | VIRTUAL(가상 모드). */
+export type SensorMode = "PENDING" | "DEVICE" | "VIRTUAL";
+
 /** Fixed quay-side bollard carrying an AE sensor (shore asset). */
 export interface Bollard {
   bollardId: string;
@@ -27,6 +31,9 @@ export interface Bollard {
   positionM: number;
   label?: string | null;
   twinSlot?: number | null; // bound digital-twin post number (1-based)
+  sensorMode: SensorMode;
+  sensorId?: string | null; // physical AE sensor id (DEVICE mode)
+  sensorBoundAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
