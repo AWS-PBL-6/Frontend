@@ -1200,7 +1200,10 @@ function BollardMarker({
 
 export interface FocusHandle {
   key: number;
+  /** camera look-at target (world coords). */
   get: () => readonly [number, number, number];
+  /** optional camera position; when absent a default seaward offset is used. */
+  cam?: () => readonly [number, number, number];
 }
 
 function CameraRig({ focus }: { focus: FocusHandle | null }) {
@@ -1230,7 +1233,12 @@ function CameraRig({ focus }: { focus: FocusHandle | null }) {
     const k = 1 - Math.exp(-3.4 * Math.min(dt, 0.05) * 20);
     target.set(x, y, z);
     controls.target.lerp(target, k * 0.12);
-    desired.set(x - 120, y + 90, z + 200);
+    if (focus.cam) {
+      const [cx, cy, cz] = focus.cam();
+      desired.set(cx, cy, cz);
+    } else {
+      desired.set(x - 120, y + 90, z + 200);
+    }
     state.camera.position.lerp(desired, k * 0.12);
     controls.update();
   });

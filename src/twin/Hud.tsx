@@ -13,6 +13,37 @@ function fmtDate(d: Date): string {
   return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`;
 }
 
+/** Tiny mouse glyph with one control lit in red (left button or scroll wheel). */
+function MouseGlyph({ part }: { part: "left" | "wheel" }) {
+  const red = "#ff5a48";
+  return (
+    <svg width="15" height="21" viewBox="0 0 15 21" fill="none" aria-hidden="true" style={{ flex: "none" }}>
+      <rect x="1" y="1" width="13" height="19" rx="6.3" stroke="currentColor" strokeWidth="1.2" />
+      <line x1="7.5" y1="1.4" x2="7.5" y2="8" stroke="currentColor" strokeWidth="1" opacity="0.55" />
+      {part === "left" && <path d="M7 2 L7 7.6 L2.4 7.6 L2.4 5 Q2.4 2.4 5.4 2 Z" fill={red} opacity="0.92" />}
+      <rect
+        x="6.3"
+        y="3.6"
+        width="2.4"
+        height="4.2"
+        rx="1.2"
+        fill={part === "wheel" ? red : "currentColor"}
+        opacity={part === "wheel" ? 1 : 0.5}
+      />
+    </svg>
+  );
+}
+
+function ControlHint({ part, extra, label }: { part: "left" | "wheel"; extra?: string; label: string }) {
+  return (
+    <span className="twin-hint">
+      <MouseGlyph part={part} />
+      {extra && <span className="twin-hint-mark">{extra}</span>}
+      {label}
+    </span>
+  );
+}
+
 function RiskBadge({ risk }: { risk: RiskLevel }) {
   return (
     <span className="twin-badge" style={{ color: HUD_RISK[risk] }}>
@@ -301,7 +332,10 @@ export function Hud({
           <i className="twin-legend-ring" />
           위험반경
         </span>
-        <span className="twin-legend-hint">드래그 회전 · 휠 확대 · 배경 클릭 선택 해제</span>
+        <span className="twin-legend-sep" />
+        <ControlHint part="left" extra="↻" label="드래그 회전" />
+        <ControlHint part="wheel" extra="＋" label="휠 확대" />
+        <ControlHint part="left" extra="✕" label="배경 클릭 · 선택 해제" />
       </section>
 
       {/* ── 우측 하단: 시계 ───────────────────────────────────────────── */}

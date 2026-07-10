@@ -8,7 +8,7 @@ import { EventDetail } from "../features/EventDetail";
 import { LineDetail } from "../features/LineDetail";
 import { PortScene, type FocusHandle } from "./PortScene";
 import { Hud } from "./Hud";
-import { approachState, computeTwinLayout } from "./layout";
+import { approachState, computeTwinLayout, BOLLARD_Z, QUAY_TOP } from "./layout";
 
 /** Full-page Busan-port digital twin: 3D live scene + translucent control HUD. */
 export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boolean }) {
@@ -71,7 +71,19 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
       setSelectedVesselId(vesselId);
       const ship = layout.ships.find((s) => s.vessel.vesselId === vesselId);
       if (ship) {
-        setFocus({ key: ++focusSeq.current, get: () => [ship.x, ship.deckY, ship.z] as const });
+        // 홋줄 관제 시점: 안벽(볼라드) 쪽에서 배를 바라봐 계류삭이 선체에 가리지
+        // 않고 정면으로 보이게 한다. 시선 타겟은 볼라드–선체 사이 계류삭 구간,
+        // 카메라는 그 반대편(안벽/야드 쪽, -z) 위쪽에 둔다.
+        const fairleadZ = ship.z - ship.beam / 2 + 0.4;
+        const midZ = (BOLLARD_Z + fairleadZ) / 2;
+        const camX = ship.x - ship.length * 0.06;
+        const camY = QUAY_TOP + ship.deckY + 48;
+        const camZ = BOLLARD_Z - (95 + ship.beam * 1.1);
+        setFocus({
+          key: ++focusSeq.current,
+          get: () => [ship.x, QUAY_TOP + ship.deckY * 0.55, midZ] as const,
+          cam: () => [camX, camY, camZ] as const,
+        });
         return;
       }
       const plan = layout.approaches.find((p) => p.vessel.vesselId === vesselId);
