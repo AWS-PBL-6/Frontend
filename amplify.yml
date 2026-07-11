@@ -1,0 +1,25 @@
+version: 1
+# AWS Amplify Hosting CI/CD build spec for the AE-Sentinel React (Vite) SPA.
+# The AWS-PBL-6/Frontend repo root == this frontend/ directory, so Amplify runs
+# here directly (no appRoot/monorepo config needed).
+#
+# NOTE: the VITE_* config is NOT committed (.env is gitignored). Set these as
+# Amplify environment variables (App settings > Environment variables) so they
+# are injected at build time:
+#   VITE_AWS_REGION, VITE_USER_POOL_ID, VITE_USER_POOL_CLIENT_ID,
+#   VITE_COGNITO_DOMAIN, VITE_API_BASE, VITE_WS_URL, VITE_ENABLE_GOOGLE
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
