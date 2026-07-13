@@ -24,6 +24,12 @@ export interface AeReading {
   craneActive: boolean;
   /** true = 실제 ML 이벤트 특징량, false = 데모 합성값 */
   live: boolean;
+  /** Sensor provenance: "piezo" = 압전(진동수) 센서. AE 필드는 진동수에서 파생된 추정치. */
+  sensorKind?: string | null;
+  /** 압전 센서가 실측한 구조 진동수 (Hz). */
+  structuralFreqHz?: number | null;
+  /** 진동수에서 추정한 정규화 장력비 (0~1, taut-cable T∝f²). */
+  loadRatio?: number | null;
 }
 
 export const SIGNAL_TYPES = [
@@ -84,6 +90,7 @@ export function fromEvent(event: EventRecord): AeReading {
   const f = event.features as Record<string, unknown>;
   const c = event.context as Record<string, unknown>;
   const signal = typeof f.signalType === "string" ? f.signalType : "Low amplitude";
+  const kind = typeof c.sensorKind === "string" ? c.sensorKind : null;
   return {
     amplitudeDbAe: round(num(f.amplitudeDbAe), 1),
     snrDb: round(num(f.snrDb), 1),
@@ -97,6 +104,9 @@ export function fromEvent(event: EventRecord): AeReading {
     windMps: round(num(c.windMps), 1),
     craneActive: num(c.craneActive) >= 1,
     live: true,
+    sensorKind: kind,
+    structuralFreqHz: kind === "piezo" ? round(num(c.structuralFreqHz), 1) : null,
+    loadRatio: kind === "piezo" ? round(num(c.loadRatio), 3) : null,
   };
 }
 

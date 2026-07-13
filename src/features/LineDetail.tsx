@@ -101,15 +101,48 @@ export function LineDetail({
             </div>
           </div>
 
+          {ae?.sensorKind === "piezo" && (
+            <div>
+              <div className="section-label">압전(피에조) 센서 · 구조 진동</div>
+              <div className="card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ minWidth: 96 }}>
+                  <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1 }}>
+                    {ae.structuralFreqHz}
+                    <span style={{ fontSize: 13, fontWeight: 500 }}> Hz</span>
+                  </div>
+                  <div className="muted" style={{ fontSize: 11 }}>측정 진동수</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
+                    <span className="muted">추정 장력</span>
+                    <b>{Math.round((ae.loadRatio ?? 0) * 100)}% MBL</b>
+                  </div>
+                  <div style={{ height: 8, background: "var(--wire)", borderRadius: 4, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${Math.round((ae.loadRatio ?? 0) * 100)}%`,
+                        height: "100%",
+                        background: `var(--${sigRisk.toLowerCase()})`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                압전 센서는 진동수만 계측합니다. 아래 음향(AE) 특징량은 taut-cable 관계(T ∝ f²)로 추정한 값입니다.
+              </div>
+            </div>
+          )}
+
           {ae && (
             <div>
               <div className="section-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                음향 방출(AE) 이벤트 분석
+                {ae.sensorKind === "piezo" ? "음향 방출(AE) · 진동수 기반 추정" : "음향 방출(AE) 이벤트 분석"}
                 <span
                   className="badge"
-                  style={{ fontSize: 10, color: ae.live ? "var(--normal)" : "var(--muted)" }}
+                  style={{ fontSize: 10, color: ae.sensorKind === "piezo" ? "var(--caution)" : ae.live ? "var(--normal)" : "var(--muted)" }}
                 >
-                  {ae.live ? "실시간" : "합성(데모)"}
+                  {ae.sensorKind === "piezo" ? "추정" : ae.live ? "실시간" : "합성(데모)"}
                 </span>
               </div>
               <div
