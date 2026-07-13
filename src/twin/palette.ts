@@ -37,8 +37,7 @@ export function worstRisk(levels: RiskLevel[]): RiskLevel {
 }
 
 /** Display risk of a line: an unmoored line (no vessel made fast) is always
- *  NORMAL — a shore-bollard sensor with no ship on it cannot be at mooring
- *  risk. Use this everywhere risk is shown instead of the raw riskLevel. */
+ *  NORMAL because its sensor-equipped rope is not under mooring load. */
 export function effectiveRisk(line: { vesselId?: string | null; riskLevel: RiskLevel }): RiskLevel {
   return line.vesselId ? line.riskLevel : "NORMAL";
 }

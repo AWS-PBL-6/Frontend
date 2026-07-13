@@ -172,7 +172,11 @@ export function Hud({
   return (
     <div className="twin-hud">
       {/* ── 좌측 상단: 관제 리스트 (반투명 글래스) ─────────────────────── */}
-      <section className={`twin-panel ${collapsed ? "twin-panel--collapsed" : ""}`} aria-label="관제 현황">
+      <section
+        className={`twin-panel ${collapsed ? "twin-panel--collapsed" : ""}`}
+        aria-label="관제 현황"
+        data-guide="control-list"
+      >
         <header className="twin-panel-head">
           <div>
             <h2>부산항 관제 현황</h2>
@@ -239,7 +243,7 @@ export function Hud({
 
             {looseLines.length > 0 && (
               <div className="twin-group">
-                <h3>미계선 센서</h3>
+                <h3>미계선 계류삭</h3>
                 {looseLines.map((l) => (
                   <LineRow
                     key={l.lineId}
@@ -275,6 +279,7 @@ export function Hud({
               <button
                 className="twin-mini"
                 onClick={onAddBollard}
+                data-guide="bollard-setup"
                 style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
               >
                 <Plus size={13} /> 볼라드 추가
@@ -285,7 +290,7 @@ export function Hud({
       </section>
 
       {/* ── 우측 상단: KPI ─────────────────────────────────────────────── */}
-      <section className="twin-kpis" aria-label="현황 요약">
+      <section className="twin-kpis" aria-label="현황 요약" data-guide="risk-summary">
         <div className="twin-kpi">
           <b>{active.length}</b>
           <span>선박</span>

@@ -1,7 +1,10 @@
 import { Suspense, lazy, useEffect, useState } from "react";
+import { RadioTower } from "lucide-react";
 import type { EventRecord, LineStatus, RiskLevel } from "../lib/types";
 import { effectiveRisk } from "../twin/palette";
 import { api } from "../lib/api";
+import { piezoBand, piezoGuideBands } from "../lib/piezo";
+import { PiezoSensorPicker } from "../components/PiezoSensorPicker";
 import {
   fromEvent,
   syntheticReading,
@@ -23,18 +26,26 @@ export function LineDetail({
   bollardLabel,
   onClose,
   onOpenEvent,
+  onChanged,
+  readOnly = false,
 }: {
   line: LineStatus;
   vesselName?: string | null;
   bollardLabel?: string | null;
   onClose: () => void;
   onOpenEvent?: (eventId: string) => void;
+  onChanged?: () => void;
+  readOnly?: boolean;
 }) {
   const risk = effectiveRisk(line);
   const score = line.vesselId ? line.riskScore : 0;
 
   // Real ML event features when the moored line has one; else synthetic.
   const [event, setEvent] = useState<EventRecord | null>(null);
+  const [binding, setBinding] = useState(false);
+  const [selectedSensorId, setSelectedSensorId] = useState("");
+  const [bindingBusy, setBindingBusy] = useState(false);
+  const [bindingError, setBindingError] = useState<string | null>(null);
   useEffect(() => {
     setEvent(null);
     if (!line.vesselId || !line.lastEventId) return;
@@ -45,12 +56,37 @@ export function LineDetail({
     };
   }, [line.lineId, line.vesselId, line.lastEventId]);
 
-  const ae: AeReading | null = !line.vesselId
+  const ae: AeReading | null = !line.vesselId || line.sensorMode === "PENDING"
     ? null
     : event
       ? fromEvent(event)
-      : syntheticReading(line);
+      : line.sensorMode === "VIRTUAL"
+        ? syntheticReading(line)
+        : null;
   const sigRisk = ae ? SIGNAL_RISK[ae.signalType] ?? "NORMAL" : "NORMAL";
+  const piezoGuide = ae?.sensorKind === "piezo" ? piezoGuideBands() : null;
+  const measuredFreq = ae?.sensorKind === "piezo" ? ae.structuralFreqHz ?? null : null;
+  const piezoRisk = measuredFreq != null ? piezoBand(measuredFreq) : "NORMAL";
+
+  const bindDevice = async () => {
+    const sensorId = selectedSensorId.trim();
+    if (!sensorId) {
+      setBindingError("AWS IoT 목록에서 이 계류삭에 부착할 센서를 선택하세요.");
+      return;
+    }
+    setBindingBusy(true);
+    setBindingError(null);
+    try {
+      await api.provisionLine(line.lineId, { sensorMode: "DEVICE", sensorId });
+      setBinding(false);
+      setSelectedSensorId("");
+      onChanged?.();
+    } catch (e) {
+      setBindingError(e instanceof Error ? e.message : "센서 연동 실패");
+    } finally {
+      setBindingBusy(false);
+    }
+  };
 
   return (
     <>
@@ -69,6 +105,50 @@ export function LineDetail({
           </button>
         </div>
         <div className="slideover-body">
+          {bindingError && <div className="alert-msg">{bindingError}</div>}
+          <div className={`sensor-card sensor-card--${line.sensorMode}`} data-guide="line-sensor-binding">
+            <div className="sensor-card-head">
+              <RadioTower size={15} />
+              <b>
+                {line.sensorMode === "DEVICE" && "계류삭 전용 피에조 센서"}
+                {line.sensorMode === "VIRTUAL" && "계류삭 시연 센서"}
+                {line.sensorMode === "PENDING" && "계류삭 센서 미연동"}
+              </b>
+              <span className="sensor-card-meta">
+                {line.sensorMode === "DEVICE" && `${line.sensorId ?? "–"} · ${line.deviceOnline ? "온라인" : "오프라인"}`}
+                {line.sensorBoundAt ? ` · ${line.sensorBoundAt.slice(0, 10)}` : ""}
+              </span>
+            </div>
+            <p className="sensor-card-desc">
+              센서는 볼라드가 아니라 선박 측 계류삭 연결 고리(아이·스플라이스 인근)에 부착하며,
+              한 센서는 한 계류삭만 측정합니다.
+            </p>
+            {line.sensorMode !== "DEVICE" && !readOnly && (
+              binding ? (
+                <div style={{ marginTop: 10 }}>
+                  <PiezoSensorPicker
+                    selectedSensorId={selectedSensorId}
+                    onSelect={setSelectedSensorId}
+                    disabled={bindingBusy}
+                    currentLineId={line.lineId}
+                  />
+                  <div className="piezo-picker-actions">
+                    <button className="btn btn-accent" disabled={bindingBusy || !selectedSensorId} onClick={bindDevice}>
+                      선택 센서 적용
+                    </button>
+                    <button className="btn btn-ghost" disabled={bindingBusy} onClick={() => setBinding(false)}>
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className="btn btn-accent btn-block" disabled={bindingBusy} onClick={() => setBinding(true)}>
+                  피에조 센서 목록에서 선택
+                </button>
+              )
+            )}
+          </div>
+
           <div className="rope-canvas">
             <span className="rope-tag">three.js · 실시간 홋줄 상태</span>
             <Suspense
@@ -97,7 +177,13 @@ export function LineDetail({
             </div>
             <div>
               <span>센서</span>
-              <b>{line.deviceOnline ? "온라인" : "오프라인"}</b>
+              <b>
+                {line.sensorMode === "PENDING"
+                  ? "미연동"
+                  : line.sensorMode === "VIRTUAL"
+                    ? "시연용"
+                    : line.deviceOnline ? "온라인" : "오프라인"}
+              </b>
             </div>
           </div>
 
@@ -131,6 +217,28 @@ export function LineDetail({
               <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
                 압전 센서는 진동수만 계측합니다. 아래 음향(AE) 특징량은 taut-cable 관계(T ∝ f²)로 추정한 값입니다.
               </div>
+              {piezoGuide && (
+                <div className="piezo-threshold-grid">
+                  <div className={`piezo-threshold piezo-threshold--NORMAL ${piezoRisk === "NORMAL" ? "is-active" : ""}`}>
+                    <span>정상</span>
+                    <b>&lt; {piezoGuide.cautionStartHz} Hz</b>
+                  </div>
+                  <div className={`piezo-threshold piezo-threshold--CAUTION ${piezoRisk === "CAUTION" ? "is-active" : ""}`}>
+                    <span>주의</span>
+                    <b>{piezoGuide.cautionStartHz}–{piezoGuide.dangerStartHz} Hz</b>
+                  </div>
+                  <div className={`piezo-threshold piezo-threshold--DANGER ${piezoRisk === "DANGER" ? "is-active" : ""}`}>
+                    <span>위험</span>
+                    <b>&ge; {piezoGuide.dangerStartHz} Hz</b>
+                  </div>
+                </div>
+              )}
+              {piezoGuide && (
+                <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+                  현재 가이드 기준은 slack {piezoGuide.slackHz} Hz, critical {piezoGuide.criticalHz} Hz 입니다.
+                  실제 이벤트 판정은 이 진동수 기준에 더해 ML 추론과 5개 이벤트 시간 정책을 함께 반영합니다.
+                </div>
+              )}
             </div>
           )}
 
@@ -173,6 +281,18 @@ export function LineDetail({
           {!line.vesselId && (
             <div className="alert-msg" style={{ background: "var(--wire)", color: "var(--graphite)", borderColor: "var(--line)" }}>
               미계선 상태(접안 선박 없음) — 위험도는 항상 정상입니다.
+            </div>
+          )}
+
+          {line.vesselId && line.sensorMode === "PENDING" && (
+            <div className="alert-msg">
+              이 계류삭에는 센서가 연결되지 않아 측정·위험 판정을 시작할 수 없습니다.
+            </div>
+          )}
+
+          {line.vesselId && line.sensorMode === "DEVICE" && !event && (
+            <div className="alert-msg" style={{ background: "var(--wire)", color: "var(--graphite)", borderColor: "var(--line)" }}>
+              실센서 이벤트 수신 대기 중입니다. 목업 수치는 표시하지 않습니다.
             </div>
           )}
 

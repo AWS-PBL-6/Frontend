@@ -58,19 +58,19 @@
 | 계류삭 상세 (LineDetail) | 선박 상세 (VesselDetail) |
 |---|---|
 | ![계류삭 상세](wireframes/screens/05-line-detail.png) | ![선박 상세](wireframes/screens/06-vessel-detail.png) |
-| 실시간 상태 + 3D 홋줄 + **AE 이벤트 분석**(수신 진폭·SNR·충격 횟수·신호 유형·환경 공변량) + 스냅백. 실 이벤트가 있으면 실시간, 없으면 합성값. | 선박 제원(IMO·선종·LOA·선석·위치) + 계류삭/센서 부착 볼라드 목록. |
+| 실시간 상태 + 3D 홋줄 + **AE 이벤트 분석** + 스냅백. DEVICE는 실 이벤트가 없으면 수신 대기, VIRTUAL만 합성값을 표시. | 선박 제원(IMO·선종·LOA·선석·위치) + 계류삭별 센서와 현재 연결 볼라드 목록. |
 
 | 볼라드 상세 (BollardDetail) |
 |---|
 | ![볼라드 상세](wireframes/screens/07-bollard-detail.png) |
-| 센서 온보딩 상태(실센서 DEVICE / 가상 VIRTUAL / 미연동 PENDING) + 연결 계류삭(최대 2). 온보딩과 계류삭 연결을 분리해 표시. |
+| 안벽 연결 위치 정보 + 연결 계류삭(최대 2). 센서 온보딩은 각 계류삭 상세에서 수행. |
 
 ### 관리 (CRUD)
 
 | 선박 · 계류삭 관리 | 선박 추가 폼 |
 |---|---|
 | ![선박 관리](wireframes/screens/08-vessels-manage.png) | ![선박 폼](wireframes/screens/09-vessel-form.png) |
-| 선박을 펼치면 계류삭(볼라드 매핑·위험도) 추가/수정/삭제, 접안/출항 처리. | 선박 제원 입력 모달. 계류삭·볼라드 폼도 동일 패턴. |
+| 선박을 펼치면 계류삭별 피에조 센서 선택·볼라드 연결·위험도 관리, 접안/출항 처리. | 선박 제원 입력 모달. 계류삭·볼라드 폼도 동일 패턴. |
 
 | 이벤트 이력 |
 |---|
@@ -102,7 +102,8 @@ public/  wireframes/(screens 캡처)  tests/
   쪽에서 계류삭을 정면으로 보는 시점), 상세 슬라이드오버 오케스트레이션.
 - **`twin/Hud.tsx`** — 반투명 관제 HUD(선박·계류삭 리스트, KPI, 경보 배너, 범례).
 - **`features/LineDetail.tsx`** — 계류삭 실시간 상세 + AE 이벤트 특징량(v2) 표시.
-- **`components/BollardDetail.tsx`** — 볼라드 센서 온보딩 + 계류삭 연결.
+- **`components/BollardDetail.tsx`** — 볼라드 위치 정보 + 연결된 계류삭 관리.
+- **`features/LineDetail.tsx`** — 계류삭별 피에조 센서 목록 조회·클릭 연동 + 실시간 상세.
 - **`components/AppLayout.tsx`** — REST 초기 로드(lines·vessels·bollards·summary)
   + WebSocket 구독으로 라인 위험도 실시간 갱신.
 

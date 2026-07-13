@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_WS_URL: string;
   readonly VITE_ENABLE_GOOGLE: string;
   readonly VITE_BERTH_IMAGE?: string;
+  readonly VITE_PIEZO_FREQ_SLACK_HZ?: string;
+  readonly VITE_PIEZO_FREQ_CRIT_HZ?: string;
 }
 
 interface ImportMeta {

@@ -72,12 +72,15 @@ export function VesselDetail({
           </div>
 
           <div>
-            <div className="section-label">계류삭 · 센서 부착 볼라드 ({vlines.length})</div>
+            <div className="section-label">계류삭 · 연결 고리 센서 ({vlines.length})</div>
             <div className="rail">
               {vlines.map((l) => (
                 <button className="rail-item" key={l.lineId} onClick={() => onOpenLine(l)}>
                   <span className={`dot dot--${l.riskLevel}`} />
                   <span className="rail-id">{l.lineId}</span>
+                  <span className="muted" style={{ fontSize: 11 }}>
+                    {l.sensorMode === "DEVICE" ? l.sensorId : l.sensorMode === "VIRTUAL" ? "시연용" : "센서 미연동"}
+                  </span>
                   <span className="badge" style={{ marginLeft: 2 }}>
                     {RISK_LABEL[l.riskLevel]}
                   </span>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { TopNav } from "./TopNav";
+import { AdminGuide, adminGuideStorageKey } from "./AdminGuide";
 import { useAuth } from "../auth/AuthProvider";
 import { useWebSocket } from "../lib/useWebSocket";
 import { api } from "../lib/api";
@@ -30,6 +31,7 @@ export function AppLayout() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -55,6 +57,12 @@ export function AppLayout() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (!loaded || !email || localStorage.getItem(adminGuideStorageKey(email)) === "done") return;
+    const timer = window.setTimeout(() => setGuideOpen(true), 450);
+    return () => window.clearTimeout(timer);
+  }, [email, loaded]);
+
   const onMsg = useCallback((msg: WsMessage) => {
     setLines((prev) => applyWs(prev, msg));
   }, []);
@@ -67,12 +75,15 @@ export function AppLayout() {
       <TopNav
         connected={connected}
         email={email}
+        onOpenGuide={() => setGuideOpen(true)}
         onSignOut={async () => {
+          setGuideOpen(false);
           await signOut();
           navigate("/login");
         }}
       />
       <Outlet context={live} />
+      {guideOpen && <AdminGuide userId={email} onClose={() => setGuideOpen(false)} />}
     </>
   );
 }
