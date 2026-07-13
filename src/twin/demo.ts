@@ -38,8 +38,8 @@ const VESSELS: Vessel[] = [
 
 interface Seed { lineId: string; vesselId: string | null; bollardId: string; score: number }
 
-// bollardId = the sensor's permanent shore bollard (fixed asset); vesselId is
-// the transient berthing association. L-901's bollard has no vessel moored yet.
+// Every seed represents one sensor-equipped line; bollardId is only its quay
+// attachment point and vesselId is the transient berthing association.
 const SEEDS: Seed[] = [
   { lineId: "L-101", vesselId: "V-HANBADA", bollardId: "Q-A01", score: 0.12 },
   { lineId: "L-102", vesselId: "V-HANBADA", bollardId: "Q-A01", score: 0.2 }, // shares Q-A01 with L-101 (2 lines, 1 bollard)
@@ -59,8 +59,7 @@ const SEEDS: Seed[] = [
 const levelOf = (score: number): RiskLevel =>
   score >= 0.7 ? "DANGER" : score >= 0.45 ? "CAUTION" : "NORMAL";
 
-// Fixed shore bollards behind the demo lines (permanent assets). The demo
-// itself IS the simulation, so every bollard runs in VIRTUAL sensor mode.
+// Fixed shore bollards behind the demo lines (attachment assets only).
 const BOLLARDS: Bollard[] = Array.from(new Set(SEEDS.map((s) => s.bollardId))).map((id, i) => ({
   bollardId: id,
   siteId: "busan",
@@ -68,9 +67,6 @@ const BOLLARDS: Bollard[] = Array.from(new Set(SEEDS.map((s) => s.bollardId))).m
   positionM: i * 20,
   label: id,
   twinSlot: null,
-  sensorMode: "VIRTUAL" as const,
-  sensorId: null,
-  sensorBoundAt: now(),
   createdAt: now(),
   updatedAt: now(),
 }));
@@ -87,6 +83,9 @@ function makeLine(s: Seed): LineStatus {
     lastEventId: null,
     snapbackZone: null,
     deviceOnline: true,
+    sensorMode: "VIRTUAL",
+    sensorId: null,
+    sensorBoundAt: now(),
     bollardId: s.bollardId,
     vesselId: s.vesselId,
   };

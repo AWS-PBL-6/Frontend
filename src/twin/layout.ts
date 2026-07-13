@@ -1,5 +1,5 @@
 import { CatmullRomCurve3, Vector3 } from "three";
-import type { Bollard, LineStatus, SensorMode, Vessel } from "../lib/types";
+import type { Bollard, LineStatus, Vessel } from "../lib/types";
 
 /* World scale: 1 unit = 1 metre. Waterline at y=0. The quay runs along the
  * X axis with its edge at z=0; the sea occupies z>0, the yard/city z<0. */
@@ -26,7 +26,6 @@ export interface BollardSpot {
   x: number;
   label: string;
   bollardId: string | null; // real managed bollard id (null for derived fallback)
-  sensorMode: SensorMode | null; // null for derived fallback posts
 }
 
 export interface ShipPlacement extends ShipDims {
@@ -134,7 +133,6 @@ export function computeTwinLayout(
               x: (i - (totalSlots - 1) / 2) * BOLLARD_SPACING,
               label: b.label || b.bollardId,
               bollardId: b.bollardId,
-              sensorMode: b.sensorMode,
             },
           ]
         : [],
@@ -145,7 +143,6 @@ export function computeTwinLayout(
       x: (i - 7.5) * BOLLARD_SPACING,
       label: `B-${String(i + 1).padStart(2, "0")}`,
       bollardId: null as string | null,
-      sensorMode: null as SensorMode | null,
     }));
   }
   const postByBollardId = new Map<string, BollardSpot>();

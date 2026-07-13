@@ -1,4 +1,10 @@
 export type RiskLevel = "NORMAL" | "CAUTION" | "DANGER";
+export type EventWorkflowStatus =
+  | "NEW"
+  | "ACKNOWLEDGED"
+  | "IN_PROGRESS"
+  | "RESOLVED"
+  | "FALSE_POSITIVE";
 
 export interface Point { x: number; y: number; }
 export interface SnapbackZone { radiusMeters: number; polygon: Point[]; }
@@ -15,15 +21,18 @@ export interface LineStatus {
   lastEventId?: string | null;
   snapbackZone?: SnapbackZone | null;
   deviceOnline: boolean;
-  bollardId?: string | null; // permanent home bollard of this sensor
+  sensorMode: SensorMode;
+  sensorId?: string | null; // AWS IoT Thing attached to this line's eye/splice
+  sensorBoundAt?: string | null;
+  bollardId?: string | null; // current quay attachment point
   vesselId?: string | null; // transient: vessel moored on this line right now
 }
 
-/** One-time sensor onboarding state of a bollard:
- *  PENDING(미연동) → DEVICE(실센서) | VIRTUAL(가상 모드). */
+/** One-time sensor onboarding state of a mooring line:
+ *  PENDING(미연동) → DEVICE(피에조 실센서). VIRTUAL is retained for legacy demos. */
 export type SensorMode = "PENDING" | "DEVICE" | "VIRTUAL";
 
-/** Fixed quay-side bollard carrying an AE sensor (shore asset). */
+/** Fixed quay-side mooring attachment point. Sensors belong to LineStatus. */
 export interface Bollard {
   bollardId: string;
   siteId: string;
@@ -31,11 +40,30 @@ export interface Bollard {
   positionM: number;
   label?: string | null;
   twinSlot?: number | null; // bound digital-twin post number (1-based)
-  sensorMode: SensorMode;
-  sensorId?: string | null; // physical AE sensor id (DEVICE mode)
-  sensorBoundAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type SensorConnectivityStatus = "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
+
+/** Assignable physical hardware discovered from the AWS IoT Core registry. */
+export interface PiezoSensor {
+  sensorId: string;
+  thingName: string;
+  displayName: string;
+  sensorKind: "PIEZO";
+  source: "AWS_IOT_CORE";
+  registrationStatus: "REGISTERED";
+  connectivityStatus: SensorConnectivityStatus;
+  lastConnectedAt?: string | null;
+  siteId?: string | null;
+  berthId?: string | null;
+  assignedLineId?: string | null;
+  assignedBollardId?: string | null;
+  assignedBollardLabel?: string | null;
+  assignedVesselId?: string | null;
+  assignedBerthId?: string | null;
+  available: boolean;
 }
 
 export type VesselStatus = "BERTHED" | "APPROACHING" | "DEPARTED";
@@ -75,6 +103,10 @@ export interface EventRecord {
   alertMessage?: string | null;
   acknowledged: boolean;
   acknowledgedAt?: string | null;
+  workflowStatus: EventWorkflowStatus;
+  workflowUpdatedAt?: string | null;
+  workflowNote?: string | null;
+  handledBy?: string | null;
 }
 
 export interface AlertRecord {
@@ -87,6 +119,22 @@ export interface AlertRecord {
   sentAt: string;
   traceId: string;
   messageId?: string | null;
+  smsRecipientCount?: number;
+}
+
+export interface SmsRecipient {
+  recipientId: string;
+  name: string;
+  phoneNumber: string;
+  siteId?: string | null;
+  berthId?: string | null;
+  role?: string | null;
+  enabled: boolean;
+  smsOptIn: boolean;
+  notes?: string | null;
+  lastNotifiedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardSummary {
@@ -95,6 +143,7 @@ export interface DashboardSummary {
   activeDangerEvents: number;
   totalEvents: number;
   totalAlerts: number;
+  totalSmsRecipients?: number;
   totalVessels?: number;
   totalBollards?: number;
   generatedAt: string;

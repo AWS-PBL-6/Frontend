@@ -16,9 +16,8 @@ const RISK_LABEL: Record<RiskLevel, string> = { NORMAL: "정상", CAUTION: "주�
 
 type LineModal = { existing?: LineStatus; presetVesselId?: string } | null;
 
-/** Vessel management — the single place to manage vessels AND their mooring
- *  lines (add/edit/delete/map). Each vessel expands to its lines; a trailing
- *  section covers unmoored (vessel-less) bollard sensors. */
+/** Vessel management — manage vessels and their individually instrumented
+ * mooring lines (add/edit/delete/map). */
 export function VesselsManage() {
   const { lines, reload } = useOutletContext<LiveData>();
   const [vessels, setVessels] = useState<Vessel[]>([]);
@@ -123,7 +122,10 @@ export function VesselsManage() {
     return (
       <div className="vessel-line-row" key={l.lineId}>
         <strong className="vlr-id">{l.lineId}</strong>
-        <span className="vlr-bollard muted">볼라드 · {l.bollardId ?? "미지정"}</span>
+        <span className="vlr-bollard muted">
+          {l.sensorMode === "DEVICE" ? `센서 · ${l.sensorId}` : l.sensorMode === "VIRTUAL" ? "센서 · 시연용" : "센서 · 미연동"}
+          {` / 볼라드 · ${l.bollardId ?? "미지정"}`}
+        </span>
         <span className={`badge badge--${risk}`}>
           <span className={`dot dot--${risk}`} />
           {RISK_LABEL[risk]}
@@ -145,12 +147,20 @@ export function VesselsManage() {
     <div className="page">
       <div className="page-head">
         <h2>선박 · 계류삭 관리</h2>
-        <button className="btn btn-accent btn-icon" onClick={() => setCreating(true)}>
+        <button
+          className="btn btn-accent btn-icon"
+          onClick={() => setCreating(true)}
+          data-guide="vessel-add"
+        >
           <Plus size={16} /> 선박 추가
         </button>
       </div>
-      <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
-        선박을 펼치면 그 선박의 계류삭(홋줄)을 추가·수정·삭제·볼라드 매핑할 수 있습니다.
+      <p
+        className="muted"
+        style={{ marginTop: -8, marginBottom: 16 }}
+        data-guide="line-management"
+      >
+        선박을 펼치면 계류삭을 추가하고, 각 연결 고리의 피에조 센서와 안벽 볼라드를 지정할 수 있습니다.
       </p>
 
       {error && <div className="banner-danger">{error}</div>}

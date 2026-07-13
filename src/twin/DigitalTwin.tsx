@@ -6,6 +6,7 @@ import { BollardDetail } from "../components/BollardDetail";
 import { BollardForm } from "../components/BollardForm";
 import { EventDetail } from "../features/EventDetail";
 import { LineDetail } from "../features/LineDetail";
+import { LineForm } from "../components/LineForm";
 import { PortScene, type FocusHandle } from "./PortScene";
 import { Hud } from "./Hud";
 import { approachState, computeTwinLayout, BOLLARD_Z, QUAY_TOP } from "./layout";
@@ -19,6 +20,7 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
   const [selectedBollardId, setSelectedBollardId] = useState<string | null>(null);
   const [editingBollard, setEditingBollard] = useState<Bollard | null>(null);
   const [creatingBollard, setCreatingBollard] = useState(false);
+  const [lineModal, setLineModal] = useState<{ presetBollardId?: string; lockBollard?: boolean } | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [focus, setFocus] = useState<FocusHandle | null>(null);
@@ -203,6 +205,8 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
             setSelectedLineId(null);
             setEventId(id);
           }}
+          readOnly={demo}
+          onChanged={reload}
         />
       )}
 
@@ -219,6 +223,7 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
             setSelectedBollardId(null);
             openLine(l);
           }}
+          onCreateLine={(b) => setLineModal({ presetBollardId: b.bollardId, lockBollard: true })}
         />
       )}
       {editingBollard && (
@@ -236,6 +241,17 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
           onClose={() => setCreatingBollard(false)}
           onSaved={() => {
             setCreatingBollard(false);
+            reload();
+          }}
+        />
+      )}
+      {lineModal && (
+        <LineForm
+          presetBollardId={lineModal.presetBollardId}
+          lockBollard={lineModal.lockBollard}
+          onClose={() => setLineModal(null)}
+          onSaved={() => {
+            setLineModal(null);
             reload();
           }}
         />

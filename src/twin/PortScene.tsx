@@ -1126,11 +1126,7 @@ function BollardMarker({
   const used = lines.length;
   const danger = lines.find((l) => effectiveRisk(l) === "DANGER");
   const clickable = !!post.bollardId;
-  const pending = post.sensorMode === "PENDING";
-  // 미연동(PENDING) 포스트는 어두운 링으로 구분 — 계류삭 연결 불가 상태.
-  const ringColor = pending ? "#3d4854" : used > 0 ? SCENE_RISK[risk].emissive : "#5b6b7a";
-  const modeLabel =
-    post.sensorMode === "PENDING" ? "센서 미연동" : post.sensorMode === "VIRTUAL" ? "가상" : null;
+  const ringColor = used > 0 ? SCENE_RISK[risk].emissive : "#5b6b7a";
 
   return (
     <group position={[post.x, 0, 0]}>
@@ -1183,10 +1179,10 @@ function BollardMarker({
       {(hovered || selected) && (
         <Html position={[0, QUAY_TOP + 7, BOLLARD_Z]} center zIndexRange={[6, 0]} style={{ pointerEvents: "none" }}>
           <div className={`twin-tag ${risk === "DANGER" ? "twin-tag--danger" : ""} ${selected ? "twin-tag--sel" : ""}`}>
-            <i className={`twin-tag-dot twin-tag-dot--${risk}`} style={pending ? { background: "#5b6b7a" } : undefined} />
+            <i className={`twin-tag-dot twin-tag-dot--${risk}`} />
             <b>{post.label}</b>
             <span>
-              연결 {used}/2{modeLabel ? ` · ${modeLabel}` : ""}
+              계류삭 연결 {used}/2
             </span>
           </div>
         </Html>

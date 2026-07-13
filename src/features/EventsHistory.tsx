@@ -3,9 +3,16 @@ import { useOutletContext } from "react-router-dom";
 import { api } from "../lib/api";
 import { EventDetail } from "./EventDetail";
 import { EventForm } from "../components/EventForm";
-import type { EventRecord, LiveData, RiskLevel } from "../lib/types";
+import type { EventRecord, EventWorkflowStatus, LiveData, RiskLevel } from "../lib/types";
 
 const RISK_LABEL: Record<RiskLevel, string> = { NORMAL: "정상", CAUTION: "주의", DANGER: "위험" };
+const WORKFLOW_LABEL: Record<EventWorkflowStatus, string> = {
+  NEW: "신규",
+  ACKNOWLEDGED: "확인",
+  IN_PROGRESS: "조치 중",
+  RESOLVED: "완료",
+  FALSE_POSITIVE: "오탐",
+};
 
 export function EventsHistory() {
   const { lines } = useOutletContext<LiveData>();
@@ -57,7 +64,7 @@ export function EventsHistory() {
         </button>
       </div>
 
-      <div className="filters">
+      <div className="filters" data-guide="event-workspace">
         <select className="select" value={lineId} onChange={(e) => setLineId(e.target.value)}>
           <option value="">전체 라인</option>
           {lines.map((l) => (
@@ -94,7 +101,9 @@ export function EventsHistory() {
               <span className="muted">
                 {RISK_LABEL[ev.riskLevel]} · {ev.riskScore.toFixed(2)}
               </span>
-              <span className="muted">{ev.acknowledged ? "확인됨" : "미확인"}</span>
+              <span className="muted">
+                {WORKFLOW_LABEL[ev.workflowStatus ?? "NEW"]} · {ev.acknowledged ? "Ack" : "미확인"}
+              </span>
               <span className="row-actions">
                 <button className="btn-sm" onClick={() => setSelected(ev.eventId)}>
                   상세

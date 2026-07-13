@@ -7,10 +7,13 @@ import type {
   DashboardSummary,
   DepartureResult,
   EventRecord,
+  EventWorkflowStatus,
   LineLayout,
   LineStatus,
+  PiezoSensor,
   RiskLevel,
   SensorMode,
+  SmsRecipient,
   Vessel,
   VesselStatus,
 } from "./types";
@@ -23,6 +26,9 @@ export interface LineInput {
   riskLevel?: RiskLevel;
   riskScore?: number;
   deviceOnline?: boolean;
+  /** 생성 시 계류삭 연결 고리에 즉시 센서 연동. 생략 시 PENDING. */
+  sensorMode?: SensorMode;
+  sensorId?: string;
   bollardId?: string | null;
   vesselId?: string | null;
 }
@@ -47,9 +53,6 @@ export interface BollardInput {
   positionM?: number;
   label?: string;
   twinSlot?: number | null;
-  /** 생성 시 즉시 1회 연동 (생략 시 PENDING — 이후 provisionBollard 로 연동) */
-  sensorMode?: SensorMode;
-  sensorId?: string;
 }
 
 export interface SensorBindingInput {
@@ -61,6 +64,24 @@ export interface EventInput {
   lineId: string;
   riskLevel: RiskLevel;
   riskScore?: number;
+}
+
+export interface EventWorkflowInput {
+  workflowStatus: EventWorkflowStatus;
+  workflowNote?: string | null;
+  handledBy?: string | null;
+}
+
+export interface SmsRecipientInput {
+  recipientId?: string;
+  name?: string;
+  phoneNumber?: string;
+  siteId?: string | null;
+  berthId?: string | null;
+  role?: string | null;
+  enabled?: boolean;
+  smsOptIn?: boolean;
+  notes?: string | null;
 }
 
 export interface DeleteResult {
@@ -120,6 +141,8 @@ export const api = {
     req<EventRecord[]>("GET", `/v1/events${qs(q as Record<string, string | number | undefined>)}`),
   getEvent: (id: string) => req<EventRecord>("GET", `/v1/events/${encodeURIComponent(id)}`),
   ackEvent: (id: string) => req<EventRecord>("POST", `/v1/events/${encodeURIComponent(id)}/ack`),
+  setEventWorkflow: (id: string, body: EventWorkflowInput) =>
+    req<EventRecord>("POST", `/v1/events/${encodeURIComponent(id)}/workflow`, body),
   testAlert: (lineId?: string) => req<AlertRecord>("POST", "/v1/alerts/test", { lineId }),
   listAlerts: () => req<AlertRecord[]>("GET", "/v1/alerts"),
 
@@ -128,8 +151,22 @@ export const api = {
   updateLine: (id: string, body: LineInput) =>
     req<LineStatus>("PUT", `/v1/lines/${encodeURIComponent(id)}`, body),
   deleteLine: (id: string) => req<DeleteResult>("DELETE", `/v1/lines/${encodeURIComponent(id)}`),
+  /** 계류삭 연결 고리에 첫 1회 센서 연동 (VIRTUAL→DEVICE 전환만 추가 허용). */
+  provisionLine: (id: string, body: SensorBindingInput) =>
+    req<LineStatus>("POST", `/v1/lines/${encodeURIComponent(id)}/sensor`, body),
   createEvent: (body: EventInput) => req<EventRecord>("POST", "/v1/events", body),
+  updateEvent: (id: string, body: Partial<EventInput> & Partial<EventWorkflowInput>) =>
+    req<EventRecord>("PUT", `/v1/events/${encodeURIComponent(id)}`, body),
   deleteEvent: (id: string) => req<DeleteResult>("DELETE", `/v1/events/${encodeURIComponent(id)}`),
+
+  // --- SMS recipients ---
+  listSmsRecipients: () => req<SmsRecipient[]>("GET", "/v1/sms-recipients"),
+  createSmsRecipient: (body: SmsRecipientInput) =>
+    req<SmsRecipient>("POST", "/v1/sms-recipients", body),
+  updateSmsRecipient: (id: string, body: SmsRecipientInput) =>
+    req<SmsRecipient>("PUT", `/v1/sms-recipients/${encodeURIComponent(id)}`, body),
+  deleteSmsRecipient: (id: string) =>
+    req<DeleteResult>("DELETE", `/v1/sms-recipients/${encodeURIComponent(id)}`),
 
   // --- vessels ---
   listVessels: () => req<Vessel[]>("GET", "/v1/vessels"),
@@ -145,7 +182,8 @@ export const api = {
   departVessel: (id: string) =>
     req<DepartureResult>("POST", `/v1/vessels/${encodeURIComponent(id)}/departure`),
 
-  // --- bollards (fixed shore assets carrying the sensors) ---
+  // --- sensors + bollards (sensors belong to lines; bollards are geometry) ---
+  listSensors: () => req<PiezoSensor[]>("GET", "/v1/sensors"),
   listBollards: () => req<Bollard[]>("GET", "/v1/bollards"),
   getBollard: (id: string) => req<Bollard>("GET", `/v1/bollards/${encodeURIComponent(id)}`),
   createBollard: (body: BollardInput) => req<Bollard>("POST", "/v1/bollards", body),
@@ -153,7 +191,4 @@ export const api = {
     req<Bollard>("PUT", `/v1/bollards/${encodeURIComponent(id)}`, body),
   deleteBollard: (id: string) =>
     req<DeleteResult>("DELETE", `/v1/bollards/${encodeURIComponent(id)}`),
-  /** 첫 1회 센서 연동 (PENDING→DEVICE|VIRTUAL, 이후 VIRTUAL→DEVICE 만 허용). */
-  provisionBollard: (id: string, body: SensorBindingInput) =>
-    req<Bollard>("POST", `/v1/bollards/${encodeURIComponent(id)}/sensor`, body),
 };
