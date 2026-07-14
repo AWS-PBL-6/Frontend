@@ -4,7 +4,16 @@ import { Html, Line, OrbitControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { LineStatus, RiskLevel } from "../lib/types";
-import { ACCENT, effectiveRisk, RISK_LABEL, SCENE_RISK, STATUS_LABEL, worstRisk } from "./palette";
+import {
+  ACCENT,
+  effectiveRisk,
+  isLineMonitoringActive,
+  OFFLINE_COLOR,
+  RISK_LABEL,
+  SCENE_RISK,
+  STATUS_LABEL,
+  worstRisk,
+} from "./palette";
 import {
   daylightFactor,
   envTheme,
@@ -615,35 +624,63 @@ function useHullGeometry({ length, beam, deckY }: ShipDims) {
   return geom;
 }
 
+function ContainerLoad({ dims, seed }: { dims: ShipDims; seed: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const { length, beam, deckY } = dims;
+  const { units, containerDepth } = useMemo(() => {
+    const random = rng(seed);
+    const colors = ["#3f5872", "#4f6172", "#3d6b6b", "#565d75", "#44586a", "#685348"];
+    const halfLength = length / 2;
+    const rowCount = Math.max(4, Math.min(6, Math.round(beam / 6)));
+    const rowPitch = beam * 0.72 / rowCount;
+    const rows = range(rowCount).map((row) => (row - (rowCount - 1) / 2) * rowPitch);
+    const packed: { position: [number, number, number]; color: string }[] = [];
+
+    // Build the complete load once. There are intentionally no random holes:
+    // every bay remains visibly filled across React/WebSocket re-renders.
+    for (let x = -halfLength * 0.4; x <= halfLength * 0.72; x += 11.7) {
+      for (const z of rows) {
+        const tiers = random() > 0.72 ? 4 : 3;
+        for (let tier = 0; tier < tiers; tier += 1) {
+          packed.push({
+            position: [x, deckY + 1.2 + tier * 2.4, z],
+            color: colors[Math.floor(random() * colors.length)],
+          });
+        }
+      }
+    }
+    return { units: packed, containerDepth: rowPitch * 0.86 };
+  }, [beam, deckY, length, seed]);
+
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    units.forEach((unit, index) => {
+      matrix.makeTranslation(...unit.position);
+      mesh.setMatrixAt(index, matrix);
+      mesh.setColorAt(index, color.set(unit.color));
+    });
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [units]);
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, units.length]} castShadow receiveShadow>
+      <boxGeometry args={[10.9, 2.2, containerDepth]} />
+      <meshStandardMaterial roughness={0.82} metalness={0.08} />
+    </instancedMesh>
+  );
+}
+
 function DeckCargo({ dims, seed }: { dims: ShipDims; seed: number }) {
   const { length, beam, deckY, kind } = dims;
   const hl = length / 2;
-  const r = useMemo(() => rng(seed), [seed]);
 
   if (kind === "container") {
-    const boxes: { x: number; z: number; h: number; c: string }[] = [];
-    const colors = ["#3f5872", "#4f6172", "#3d6b6b", "#565d75", "#44586a"];
-    for (let x = -hl * 0.38; x <= hl * 0.7; x += 13) {
-      for (const zf of [-0.52, 0, 0.52]) {
-        if (r() < 0.18) continue;
-        boxes.push({
-          x,
-          z: beam * 0.5 * zf * 0.9,
-          h: (1 + Math.floor(r() * 3)) * 2.6,
-          c: colors[Math.floor(r() * colors.length)],
-        });
-      }
-    }
-    return (
-      <group>
-        {boxes.map((b, i) => (
-          <mesh key={i} position={[b.x, deckY + b.h / 2, b.z]}>
-            <boxGeometry args={[11, b.h, beam * 0.26]} />
-            <meshStandardMaterial color={b.c} roughness={0.85} />
-          </mesh>
-        ))}
-      </group>
-    );
+    return <ContainerLoad dims={dims} seed={seed} />;
   }
   if (kind === "bulk") {
     return (
@@ -1016,6 +1053,7 @@ function MooringLine({
   const [hovered, setHovered] = useState(false);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const ghostMat = useRef<THREE.MeshBasicMaterial>(null);
+  const monitoringActive = isLineMonitoringActive(status);
   const risk = effectiveRisk(status);
 
   const curve = useMemo(() => {
@@ -1041,16 +1079,19 @@ function MooringLine({
 
   useEffect(() => {
     if (mat.current) {
-      mat.current.color.set(SCENE_RISK[risk].base);
-      mat.current.emissive.set(SCENE_RISK[risk].emissive);
+      mat.current.color.set(monitoringActive ? SCENE_RISK[risk].base : OFFLINE_COLOR);
+      mat.current.emissive.set(monitoringActive ? SCENE_RISK[risk].emissive : "#46515c");
     }
-    if (ghostMat.current) ghostMat.current.color.set(SCENE_RISK[risk].emissive);
-  }, [risk]);
+    if (ghostMat.current) {
+      ghostMat.current.color.set(monitoringActive ? SCENE_RISK[risk].emissive : OFFLINE_COLOR);
+    }
+  }, [monitoringActive, risk]);
 
   useFrame((state) => {
     if (!mat.current) return;
     const t = state.clock.elapsedTime;
-    if (risk === "DANGER") mat.current.emissiveIntensity = 1.3 + Math.sin(t * 6) * 0.7;
+    if (!monitoringActive) mat.current.emissiveIntensity = 0.12;
+    else if (risk === "DANGER") mat.current.emissiveIntensity = 1.3 + Math.sin(t * 6) * 0.7;
     else if (risk === "CAUTION") mat.current.emissiveIntensity = 1.1 + Math.sin(t * 2.2) * 0.25;
     else mat.current.emissiveIntensity = 0.55;
   });
@@ -1069,7 +1110,7 @@ function MooringLine({
         <meshBasicMaterial
           ref={ghostMat}
           transparent
-          opacity={risk === "NORMAL" ? 0.16 : 0.42}
+          opacity={!monitoringActive ? 0.08 : risk === "NORMAL" ? 0.16 : 0.42}
           depthTest={false}
           depthWrite={false}
         />
@@ -1096,10 +1137,15 @@ function MooringLine({
       {showTag && (
         <Html position={[mid.x, mid.y + 4, mid.z]} center zIndexRange={[6, 0]} style={{ pointerEvents: "none" }}>
           <div className={`twin-tag twin-tag--line ${risk === "DANGER" ? "twin-tag--danger" : ""}`}>
-            <i className={`twin-tag-dot twin-tag-dot--${risk}`} />
+            <i
+              className={`twin-tag-dot twin-tag-dot--${risk}`}
+              style={!monitoringActive ? { background: OFFLINE_COLOR } : undefined}
+            />
             <b>{placement.lineId}</b>
             <span>
-              {bollardId} · {status.riskScore.toFixed(2)} {RISK_LABEL[risk]}
+              {monitoringActive
+                ? `${bollardId} · ${status.riskScore.toFixed(2)} ${RISK_LABEL[risk]}`
+                : `${bollardId} · 관제 대기`}
             </span>
           </div>
         </Html>
@@ -1122,11 +1168,12 @@ function BollardMarker({
   onSelect: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const risk = worstRisk(lines.map((l) => effectiveRisk(l)));
+  const monitoredLines = lines.filter(isLineMonitoringActive);
+  const risk = worstRisk(monitoredLines.map((l) => effectiveRisk(l)));
   const used = lines.length;
   const danger = lines.find((l) => effectiveRisk(l) === "DANGER");
   const clickable = !!post.bollardId;
-  const ringColor = used > 0 ? SCENE_RISK[risk].emissive : "#5b6b7a";
+  const ringColor = monitoredLines.length > 0 ? SCENE_RISK[risk].emissive : "#5b6b7a";
 
   return (
     <group position={[post.x, 0, 0]}>
@@ -1295,8 +1342,8 @@ export function PortScene({
   const vesselRisk = useMemo(() => {
     const m = new Map<string, RiskLevel>();
     for (const l of lines) {
-      if (!l.vesselId) continue;
-      m.set(l.vesselId, worstRisk([m.get(l.vesselId) ?? "NORMAL", l.riskLevel]));
+      if (!l.vesselId || !isLineMonitoringActive(l)) continue;
+      m.set(l.vesselId, worstRisk([m.get(l.vesselId) ?? "NORMAL", effectiveRisk(l)]));
     }
     return m;
   }, [lines]);

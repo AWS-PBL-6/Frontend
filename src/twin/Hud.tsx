@@ -1,7 +1,16 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import type { LineStatus, RiskLevel, Vessel } from "../lib/types";
-import { effectiveRisk, HUD_RISK, RISK_LABEL, RISK_ORDER, STATUS_LABEL, worstRisk } from "./palette";
+import type { LineStatus, LiveSensorReading, RiskLevel, Vessel } from "../lib/types";
+import {
+  effectiveRisk,
+  HUD_RISK,
+  isLineMonitoringActive,
+  OFFLINE_COLOR,
+  RISK_LABEL,
+  RISK_ORDER,
+  STATUS_LABEL,
+  worstRisk,
+} from "./palette";
 import { approachState, type TwinLayout } from "./layout";
 
 function fmtClock(d: Date): string {
@@ -53,31 +62,73 @@ function RiskBadge({ risk }: { risk: RiskLevel }) {
   );
 }
 
+function InactiveBadge() {
+  return (
+    <span className="twin-badge" style={{ color: OFFLINE_COLOR }}>
+      <i style={{ background: OFFLINE_COLOR }} />
+      관제 대기
+    </span>
+  );
+}
+
 function LineRow({
   line,
+  reading,
   bollardId,
   onClick,
 }: {
   line: LineStatus;
+  reading?: LiveSensorReading;
   bollardId?: string;
   onClick: () => void;
 }) {
+  const monitoringActive = isLineMonitoringActive(line);
   const risk = effectiveRisk(line);
-  const score = line.vesselId ? line.riskScore : 0;
+  const score = monitoringActive ? line.riskScore : null;
+  const readingAgeSeconds = reading
+    ? Math.max(0, Math.floor((Date.now() - Date.parse(reading.receivedAt)) / 1000))
+    : null;
+  const ageLabel = readingAgeSeconds == null
+    ? null
+    : readingAgeSeconds < 5
+      ? "방금"
+      : readingAgeSeconds < 60
+        ? `${readingAgeSeconds}초 전`
+        : `${Math.floor(readingAgeSeconds / 60)}분 전`;
+  const sensorLabel = line.sensorMode === "DEVICE" && !line.deviceOnline
+    ? "0.0 Hz · 오프라인"
+    : reading
+      ? `${reading.freqHz.toFixed(1)} Hz · ${ageLabel}`
+      : line.deviceOnline
+        ? "온라인 · 값 대기"
+        : "수신 대기";
   return (
-    <button className="twin-line-row" onClick={onClick} title={`${line.lineId} 상세`}>
-      <i className="twin-dot" style={{ background: HUD_RISK[risk] }} />
-      <span className="twin-line-id">{line.lineId}</span>
-      <span className="twin-line-bollard">{bollardId ?? "–"}</span>
+    <button
+      className="twin-line-row"
+      onClick={onClick}
+      title={`${line.lineId} · ${sensorLabel} · ${score == null ? `마지막 판정 ${RISK_LABEL[line.riskLevel]} ${line.riskScore.toFixed(2)}` : `위험점수 ${score.toFixed(2)}`}`}
+    >
+      <i className="twin-dot" style={{ background: monitoringActive ? HUD_RISK[risk] : OFFLINE_COLOR }} />
+      <span className="twin-line-main">
+        <span className="twin-line-id">{line.lineId}</span>
+        <span className="twin-line-bollard">{bollardId ?? "–"}</span>
+      </span>
+      <span
+        key={reading?.eventId ?? (line.deviceOnline ? "online" : "offline")}
+        className={`twin-line-sensor ${readingAgeSeconds != null && readingAgeSeconds < 5 ? "is-fresh" : ""}`}
+      >
+        <i className={`twin-sensor-dot ${line.deviceOnline ? "is-online" : ""}`} />
+        {sensorLabel}
+      </span>
       <span className="twin-line-bar">
         <i
           style={{
-            width: `${Math.round(score * 100)}%`,
-            background: HUD_RISK[risk],
+            width: `${Math.round((score ?? 0) * 100)}%`,
+            background: monitoringActive ? HUD_RISK[risk] : OFFLINE_COLOR,
           }}
         />
       </span>
-      <span className="twin-line-score">{score.toFixed(2)}</span>
+      <span className="twin-line-score">{score == null ? "—" : score.toFixed(2)}</span>
     </button>
   );
 }
@@ -85,6 +136,7 @@ function LineRow({
 export interface HudProps {
   vessels: Vessel[];
   lines: LineStatus[];
+  liveReadings: Record<string, LiveSensorReading>;
   layout: TwinLayout;
   selectedVesselId: string | null;
   nowSec: number;
@@ -100,6 +152,7 @@ export interface HudProps {
 export function Hud({
   vessels,
   lines,
+  liveReadings,
   layout,
   selectedVesselId,
   nowSec,
@@ -123,7 +176,12 @@ export function Hud({
       m.set(l.vesselId, arr);
     }
     for (const arr of m.values()) {
-      arr.sort((a, b) => RISK_ORDER[b.riskLevel] - RISK_ORDER[a.riskLevel] || b.riskScore - a.riskScore);
+      arr.sort(
+        (a, b) =>
+          Number(isLineMonitoringActive(b)) - Number(isLineMonitoringActive(a))
+          || RISK_ORDER[effectiveRisk(b)] - RISK_ORDER[effectiveRisk(a)]
+          || b.riskScore - a.riskScore,
+      );
     }
     return m;
   }, [lines]);
@@ -148,9 +206,13 @@ export function Hud({
 
   const counts = useMemo(() => {
     const c: Record<RiskLevel, number> = { NORMAL: 0, CAUTION: 0, DANGER: 0 };
-    for (const l of lines) c[effectiveRisk(l)] += 1;
+    for (const l of lines) if (isLineMonitoringActive(l)) c[effectiveRisk(l)] += 1;
     return c;
   }, [lines]);
+  const inactiveCount = useMemo(
+    () => lines.filter((line) => !isLineMonitoringActive(line)).length,
+    [lines],
+  );
 
   const danger = useMemo(
     () =>
@@ -182,6 +244,7 @@ export function Hud({
             <h2>부산항 관제 현황</h2>
             <p>
               선박 {active.length} · 홋줄 {lines.length}
+              {inactiveCount > 0 && ` · 관제 대기 ${inactiveCount}`}
               {demo && <em className="twin-chip-demo">DEMO</em>}
             </p>
           </div>
@@ -202,7 +265,9 @@ export function Hud({
 
             {active.map((v) => {
               const vlines = linesByVessel.get(v.vesselId) ?? [];
-              const risk = worstRisk(vlines.map((l) => l.riskLevel));
+              const monitoredLines = vlines.filter(isLineMonitoringActive);
+              const monitoringActive = monitoredLines.length > 0;
+              const risk = worstRisk(monitoredLines.map((l) => effectiveRisk(l)));
               const selected = v.vesselId === selectedVesselId;
               const open = selected || risk === "DANGER";
               const sub =
@@ -212,14 +277,14 @@ export function Hud({
               return (
                 <div key={v.vesselId} className={`twin-vessel ${selected ? "twin-vessel--sel" : ""}`}>
                   <button className="twin-vessel-row" onClick={() => onSelectVessel(v.vesselId)}>
-                    <i className="twin-dot" style={{ background: HUD_RISK[risk] }} />
+                    <i className="twin-dot" style={{ background: monitoringActive ? HUD_RISK[risk] : OFFLINE_COLOR }} />
                     <span className="twin-vessel-name">{v.name}</span>
                     <span className={`twin-status twin-status--${v.status}`}>{STATUS_LABEL[v.status]}</span>
                   </button>
                   <div className="twin-vessel-sub">
                     <span>{sub}</span>
                     <span className="twin-vessel-actions">
-                      <RiskBadge risk={risk} />
+                      {monitoringActive ? <RiskBadge risk={risk} /> : <InactiveBadge />}
                       <button className="twin-mini" onClick={() => onOpenVessel(v.vesselId)}>
                         상세
                       </button>
@@ -231,6 +296,7 @@ export function Hud({
                         <LineRow
                           key={l.lineId}
                           line={l}
+                          reading={liveReadings[l.lineId]}
                           bollardId={layout.bollardByLine[l.lineId]}
                           onClick={() => onSelectLine(l)}
                         />
@@ -248,6 +314,7 @@ export function Hud({
                   <LineRow
                     key={l.lineId}
                     line={l}
+                    reading={liveReadings[l.lineId]}
                     bollardId={layout.bollardByLine[l.lineId]}
                     onClick={() => onSelectLine(l)}
                   />

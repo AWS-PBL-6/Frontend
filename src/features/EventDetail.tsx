@@ -1,8 +1,7 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { EventRecord, EventWorkflowStatus, RiskLevel } from "../lib/types";
-
-const RopeScene = lazy(() => import("./RopeScene"));
+import RopeScene from "./RopeScene";
 
 const RISK_COLOR: Record<RiskLevel, string> = {
   NORMAL: "var(--normal)",
@@ -124,15 +123,7 @@ export function EventDetail({
             <>
               <div className="rope-canvas">
                 <span className="rope-tag">three.js · 실시간 홋줄 상태</span>
-                <Suspense
-                  fallback={
-                    <div className="center" style={{ height: "100%" }}>
-                      <div className="spin" />
-                    </div>
-                  }
-                >
-                  <RopeScene risk={event.riskLevel} />
-                </Suspense>
+                <RopeScene risk={event.riskLevel} />
               </div>
 
               <div className="prob">
@@ -154,6 +145,40 @@ export function EventDetail({
                 ))}
               </div>
 
+              {event.responseGuidance && (
+                <div className={`guidance-card guidance-card--${event.riskLevel}`}>
+                  <div className="section-label">
+                    상황별 대응 안내 · {event.responseGuidance.source} · 신뢰도 {event.responseGuidance.guidance.confidence}
+                  </div>
+                  <h3>{event.responseGuidance.guidance.headline}</h3>
+                  <p>{event.responseGuidance.guidance.situation}</p>
+                  {!!event.responseGuidance.guidance.immediateActions.length && (
+                    <div>
+                      <b>즉시 조치</b>
+                      <ol>
+                        {event.responseGuidance.guidance.immediateActions.map((action) => <li key={action}>{action}</li>)}
+                      </ol>
+                    </div>
+                  )}
+                  {!!event.responseGuidance.guidance.followupActions.length && (
+                    <div>
+                      <b>후속 조치</b>
+                      <ul>
+                        {event.responseGuidance.guidance.followupActions.map((action) => <li key={action}>{action}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {!!event.responseGuidance.guidance.citations.length && (
+                    <details>
+                      <summary>RAG 근거 문서</summary>
+                      <ul>
+                        {event.responseGuidance.guidance.citations.map((citation) => <li key={citation}>{citation}</li>)}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+
               <div className="card" style={{ padding: "12px 14px" }}>
                 <div className="section-label">운영 상태</div>
                 <div className="kv">
@@ -161,7 +186,7 @@ export function EventDetail({
                   <div><span>확인 상태</span><b>{event.acknowledged ? "확인 완료 (Ack)" : "미확인"}</b></div>
                   <div>
                     <span>알림 전파</span>
-                    <b>{event.riskLevel === "DANGER" ? (event.alertMessage ? "WebSocket + SNS" : "WebSocket · SNS 대상") : "WebSocket"}</b>
+                    <b>{event.alertMessage ? "WebSocket + SNS 이메일 + 등록 SMS" : "WebSocket"}</b>
                   </div>
                   <div><span>담당자</span><b>{event.handledBy || "–"}</b></div>
                 </div>
@@ -202,10 +227,12 @@ export function EventDetail({
               </div>
 
               <div className="kv">
-                <div><span>peakAmplitude</span><b>{fmt(event.features.peakAmplitude)}</b></div>
-                <div><span>energy</span><b>{fmt(event.features.energy)}</b></div>
-                <div><span>dominantFreq (Hz)</span><b>{fmt(event.features.dominantFrequencyHz)}</b></div>
-                <div><span>tension (kN)</span><b>{fmt(asNum(event.context.tensionEstimateKn))}</b></div>
+                <div><span>구조 진동수 (실측)</span><b>{fmt(asNum(event.context.structuralFreqHz))} Hz</b></div>
+                <div><span>loadRatio (파생)</span><b>{fmt(asNum(event.context.loadRatio))}</b></div>
+                <div><span>AE 진폭 (파생)</span><b>{fmt(asNum(event.features.amplitudeDbAe))} dB</b></div>
+                <div><span>SNR (파생)</span><b>{fmt(asNum(event.features.snrDb))} dB</b></div>
+                <div><span>hitCount (파생)</span><b>{fmt(asNum(event.features.hitCount))}</b></div>
+                <div><span>signalType</span><b>{String(event.features.signalType ?? "–")}</b></div>
               </div>
 
               {event.snapbackZone && (

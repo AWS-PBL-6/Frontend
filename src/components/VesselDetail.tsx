@@ -1,4 +1,5 @@
 import type { LineStatus, RiskLevel, Vessel, VesselStatus } from "../lib/types";
+import { effectiveRisk, isLineMonitoringActive } from "../twin/palette";
 
 const RISK_COLOR: Record<RiskLevel, string> = {
   NORMAL: "#6f8476",
@@ -74,27 +75,31 @@ export function VesselDetail({
           <div>
             <div className="section-label">계류삭 · 연결 고리 센서 ({vlines.length})</div>
             <div className="rail">
-              {vlines.map((l) => (
+              {vlines.map((l) => {
+                const monitoringActive = isLineMonitoringActive(l);
+                const risk = effectiveRisk(l);
+                return (
                 <button className="rail-item" key={l.lineId} onClick={() => onOpenLine(l)}>
-                  <span className={`dot dot--${l.riskLevel}`} />
+                  <span className={`dot ${monitoringActive ? `dot--${risk}` : "dot--OFFLINE"}`} />
                   <span className="rail-id">{l.lineId}</span>
                   <span className="muted" style={{ fontSize: 11 }}>
                     {l.sensorMode === "DEVICE" ? l.sensorId : l.sensorMode === "VIRTUAL" ? "시연용" : "센서 미연동"}
                   </span>
                   <span className="badge" style={{ marginLeft: 2 }}>
-                    {RISK_LABEL[l.riskLevel]}
+                    {monitoringActive ? RISK_LABEL[risk] : "관제 대기"}
                   </span>
                   <span className="rail-bar">
                     <i
                       style={{
-                        width: `${Math.round(l.riskScore * 100)}%`,
-                        background: RISK_COLOR[l.riskLevel],
+                        width: `${Math.round((monitoringActive ? l.riskScore : 0) * 100)}%`,
+                        background: monitoringActive ? RISK_COLOR[risk] : "#7d8792",
                       }}
                     />
                   </span>
-                  <span className="rail-score">{l.riskScore.toFixed(2)}</span>
+                  <span className="rail-score">{monitoringActive ? l.riskScore.toFixed(2) : "—"}</span>
                 </button>
-              ))}
+                );
+              })}
               {vlines.length === 0 && (
                 <div className="muted">이 선박에 연결된 계류삭이 없습니다.</div>
               )}

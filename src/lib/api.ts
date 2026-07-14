@@ -129,7 +129,7 @@ function qs(params: Record<string, string | number | undefined>): string {
 
 export interface EventQuery {
   lineId?: string;
-  riskLevel?: RiskLevel;
+  riskLevel?: RiskLevel | "ABNORMAL";
   limit?: number;
 }
 
@@ -143,7 +143,8 @@ export const api = {
   ackEvent: (id: string) => req<EventRecord>("POST", `/v1/events/${encodeURIComponent(id)}/ack`),
   setEventWorkflow: (id: string, body: EventWorkflowInput) =>
     req<EventRecord>("POST", `/v1/events/${encodeURIComponent(id)}/workflow`, body),
-  testAlert: (lineId?: string) => req<AlertRecord>("POST", "/v1/alerts/test", { lineId }),
+  testAlert: (lineId?: string, riskLevel: "CAUTION" | "DANGER" = "DANGER") =>
+    req<import("./types").TestAlertResult>("POST", "/v1/alerts/test", { lineId, riskLevel }),
   listAlerts: () => req<AlertRecord[]>("GET", "/v1/alerts"),
 
   // --- writes (CRUD) ---

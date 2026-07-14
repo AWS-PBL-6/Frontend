@@ -1,16 +1,30 @@
 import { useState } from "react";
 import { CircleHelp } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import type { RealtimeConnectionState } from "../lib/types";
 
 interface Props {
-  connected: boolean;
+  realtimeState: RealtimeConnectionState;
+  lastRealtimeAt: string | null;
   email: string | null;
   onOpenGuide: () => void;
   onSignOut: () => void;
 }
 
-export function TopNav({ connected, email, onOpenGuide, onSignOut }: Props) {
+const REALTIME_LABEL: Record<RealtimeConnectionState, string> = {
+  disabled: "실시간 미설정",
+  connecting: "실시간 연결 중",
+  connected: "실시간 연결됨",
+  reconnecting: "실시간 재연결 중",
+  offline: "네트워크 오프라인",
+};
+
+export function TopNav({ realtimeState, lastRealtimeAt, email, onOpenGuide, onSignOut }: Props) {
   const [open, setOpen] = useState(false);
+  const connected = realtimeState === "connected";
+  const realtimeTitle = lastRealtimeAt
+    ? `${REALTIME_LABEL[realtimeState]} · 최근 이벤트 ${new Date(lastRealtimeAt).toLocaleString("ko-KR")}`
+    : REALTIME_LABEL[realtimeState];
   return (
     <nav className="nav" data-guide="navigation">
       <div className="nav-left">
@@ -31,11 +45,11 @@ export function TopNav({ connected, email, onOpenGuide, onSignOut }: Props) {
       <div className="nav-right">
         <span
           className="conn"
-          title={connected ? "실시간 연결됨" : "연결 끊김"}
+          title={realtimeTitle}
           data-guide="connection-status"
         >
           <span className={`conn-dot ${connected ? "on" : ""}`} />
-          {connected ? "실시간 연결됨" : "연결 대기"}
+          {REALTIME_LABEL[realtimeState]}
         </span>
         <button className="guide-launch" onClick={onOpenGuide} data-guide="guide-launch">
           <CircleHelp size={15} />

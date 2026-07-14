@@ -73,7 +73,7 @@ const STEPS: GuideStep[] = [
     target: "recipient-add",
     phase: "5 · 경보 수신 설정",
     title: "비상 SMS 수신자를 지정하세요",
-    body: "DANGER 이벤트를 받을 담당자를 등록합니다. 실제 발송 대상이 되려면 ‘활성’과 ‘SMS 수신 동의’가 모두 켜져 있어야 합니다.",
+    body: "CAUTION/DANGER 이벤트를 받을 담당자를 등록합니다. 실제 발송 대상이 되려면 ‘활성’과 ‘SMS 수신 동의’가 모두 켜져 있어야 합니다.",
     tip: "전화번호는 국가번호를 포함한 E.164 형식(예: +821012345678)으로 입력하세요.",
     placement: "bottom",
   },

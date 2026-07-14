@@ -168,7 +168,7 @@ export function SmsRecipientsManage() {
         <div>
           <h2>SMS 수신자</h2>
           <div className="muted" style={{ fontSize: 12 }}>
-            DANGER 이벤트 발생 시 활성/동의 수신자에게 직접 SMS를 발송합니다.
+            CAUTION/DANGER 이벤트 발생 시 활성·수신동의 사용자에게 직접 SMS를 발송합니다.
           </div>
         </div>
         <button

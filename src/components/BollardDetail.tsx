@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Cable, Pencil, Plus, Trash2, Unplug } from "lucide-react";
 import { api } from "../lib/api";
-import { effectiveRisk } from "../twin/palette";
+import { effectiveRisk, isLineMonitoringActive } from "../twin/palette";
 import type { Bollard, LineStatus, RiskLevel, Vessel } from "../lib/types";
 
 const RISK_LABEL: Record<RiskLevel, string> = {
@@ -173,11 +173,12 @@ export function BollardDetail({
             </div>
             <div className="rail">
               {connected.map((line) => {
+                const monitoringActive = isLineMonitoringActive(line);
                 const risk = effectiveRisk(line);
                 const moored = !!line.vesselId;
                 return (
                   <div key={line.lineId} className="rail-item" style={{ cursor: "default" }}>
-                    <span className={`dot dot--${risk}`} />
+                    <span className={`dot ${monitoringActive ? `dot--${risk}` : "dot--OFFLINE"}`} />
                     <button
                       className="rail-id"
                       style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 600 }}
@@ -190,7 +191,9 @@ export function BollardDetail({
                       {line.sensorMode === "DEVICE" ? line.sensorId : line.sensorMode === "VIRTUAL" ? "시연 센서" : "센서 미연동"}
                       {moored ? ` · ${vesselName(line.vesselId)}` : " · 미계선"}
                     </span>
-                    <span className={`badge badge--${risk}`}>{RISK_LABEL[risk]}</span>
+                    <span className={`badge ${monitoringActive ? `badge--${risk}` : "badge--OFFLINE"}`}>
+                      {monitoringActive ? RISK_LABEL[risk] : "관제 대기"}
+                    </span>
                     {!readOnly && (
                       <button
                         className="icon-btn icon-btn--act"
