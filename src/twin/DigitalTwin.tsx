@@ -13,7 +13,7 @@ import { approachState, computeTwinLayout, BOLLARD_Z, QUAY_TOP } from "./layout"
 
 /** Full-page Busan-port digital twin: 3D live scene + translucent control HUD. */
 export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boolean }) {
-  const { lines, vessels, bollards, loaded, error, reload } = live;
+  const { lines, vessels, bollards, loaded, error, reload, liveReadings } = live;
   const [selectedVesselId, setSelectedVesselId] = useState<string | null>(null);
   const [detailVesselId, setDetailVesselId] = useState<string | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -169,6 +169,7 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
       <Hud
         vessels={vessels}
         lines={lines}
+        liveReadings={liveReadings}
         layout={layout}
         selectedVesselId={selectedVesselId}
         nowSec={nowSec}
@@ -198,6 +199,7 @@ export function DigitalTwin({ live, demo = false }: { live: LiveData; demo?: boo
       {selectedLine && (
         <LineDetail
           line={selectedLine}
+          liveReading={liveReadings[selectedLine.lineId] ?? null}
           vesselName={vessels.find((v) => v.vesselId === selectedLine.vesselId)?.name ?? null}
           bollardLabel={layout.bollardByLine[selectedLine.lineId] ?? selectedLine.bollardId}
           onClose={() => setSelectedLineId(null)}

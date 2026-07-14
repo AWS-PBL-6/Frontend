@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { RadioTower } from "lucide-react";
-import type { EventRecord, LineStatus, RiskLevel } from "../lib/types";
-import { effectiveRisk } from "../twin/palette";
+import type { EventRecord, LineStatus, LiveSensorReading, RiskLevel } from "../lib/types";
+import { effectiveRisk, isLineMonitoringActive } from "../twin/palette";
 import { api } from "../lib/api";
 import { piezoBand, piezoGuideBands } from "../lib/piezo";
 import { PiezoSensorPicker } from "../components/PiezoSensorPicker";
@@ -12,8 +12,7 @@ import {
   SIGNAL_RISK,
   type AeReading,
 } from "../lib/acoustic";
-
-const RopeScene = lazy(() => import("./RopeScene"));
+import RopeScene from "./RopeScene";
 
 const RISK_LABEL: Record<RiskLevel, string> = { NORMAL: "정상", CAUTION: "주의", DANGER: "위험" };
 
@@ -22,6 +21,7 @@ const RISK_LABEL: Record<RiskLevel, string> = { NORMAL: "정상", CAUTION: "주�
  *  (fetched); demo/backendless lines fall back to a synthetic reading. */
 export function LineDetail({
   line,
+  liveReading,
   vesselName,
   bollardLabel,
   onClose,
@@ -30,6 +30,7 @@ export function LineDetail({
   readOnly = false,
 }: {
   line: LineStatus;
+  liveReading?: LiveSensorReading | null;
   vesselName?: string | null;
   bollardLabel?: string | null;
   onClose: () => void;
@@ -37,8 +38,10 @@ export function LineDetail({
   onChanged?: () => void;
   readOnly?: boolean;
 }) {
+  const monitoringActive = isLineMonitoringActive(line);
   const risk = effectiveRisk(line);
-  const score = line.vesselId ? line.riskScore : 0;
+  const score = monitoringActive ? line.riskScore : 0;
+  const physicalDeviceOffline = line.sensorMode === "DEVICE" && !line.deviceOnline;
 
   // Real ML event features when the moored line has one; else synthetic.
   const [event, setEvent] = useState<EventRecord | null>(null);
@@ -56,16 +59,39 @@ export function LineDetail({
     };
   }, [line.lineId, line.vesselId, line.lastEventId]);
 
-  const ae: AeReading | null = !line.vesselId || line.sensorMode === "PENDING"
+  const ae: AeReading | null = !line.vesselId || line.sensorMode === "PENDING" || physicalDeviceOffline
     ? null
     : event
       ? fromEvent(event)
       : line.sensorMode === "VIRTUAL"
         ? syntheticReading(line)
         : null;
+  // Heartbeats advance line.updatedAt without carrying a measurement. Compare
+  // device measurement clocks instead, otherwise a heartbeat received during
+  // slow inference makes the real value disappear from this detail panel.
+  const readingIsCurrent = liveReading
+    && (
+      !line.lastMeasurementAt
+      || Date.parse(liveReading.occurredAt) >= Date.parse(line.lastMeasurementAt)
+    );
+  const currentLiveReading = !physicalDeviceOffline && readingIsCurrent ? liveReading : null;
+  const liveReadingFresh = currentLiveReading
+    ? Date.now() - Date.parse(currentLiveReading.receivedAt) <= 15_000
+    : false;
   const sigRisk = ae ? SIGNAL_RISK[ae.signalType] ?? "NORMAL" : "NORMAL";
-  const piezoGuide = ae?.sensorKind === "piezo" ? piezoGuideBands() : null;
-  const measuredFreq = ae?.sensorKind === "piezo" ? ae.structuralFreqHz ?? null : null;
+  const measuredFreq = physicalDeviceOffline
+    ? 0
+    : line.sensorMode === "DEVICE"
+      ? currentLiveReading?.freqHz ?? null
+      : currentLiveReading?.freqHz
+        ?? (ae?.sensorKind === "piezo" ? ae.structuralFreqHz ?? null : null);
+  const measuredLoadRatio = physicalDeviceOffline
+    ? 0
+    : line.sensorMode === "DEVICE"
+      ? currentLiveReading?.loadRatio ?? null
+      : currentLiveReading?.loadRatio
+        ?? (ae?.sensorKind === "piezo" ? ae.loadRatio ?? null : null);
+  const piezoGuide = measuredFreq != null ? piezoGuideBands() : null;
   const piezoRisk = measuredFreq != null ? piezoBand(measuredFreq) : "NORMAL";
 
   const bindDevice = async () => {
@@ -95,9 +121,11 @@ export function LineDetail({
         <div className="slideover-head">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <strong>{line.lineId}</strong>
-            <span className={`badge badge--${risk}`}>
-              <span className={`dot dot--${risk}`} />
-              {RISK_LABEL[risk]} · {score.toFixed(2)}
+            <span className={`badge ${monitoringActive ? `badge--${risk}` : "badge--OFFLINE"}`}>
+              <span className={`dot ${monitoringActive ? `dot--${risk}` : "dot--OFFLINE"}`} />
+              {monitoringActive
+                ? `${RISK_LABEL[risk]} · ${score.toFixed(2)}`
+                : `관제 대기 · 마지막 ${RISK_LABEL[line.riskLevel]} ${line.riskScore.toFixed(2)}`}
             </span>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="닫기">
@@ -116,6 +144,9 @@ export function LineDetail({
               </b>
               <span className="sensor-card-meta">
                 {line.sensorMode === "DEVICE" && `${line.sensorId ?? "–"} · ${line.deviceOnline ? "온라인" : "오프라인"}`}
+                {line.sensorMode === "DEVICE" && line.lastSeenAt
+                  ? ` · 최근 감지 ${new Date(line.lastSeenAt).toLocaleString("ko-KR")}`
+                  : ""}
                 {line.sensorBoundAt ? ` · ${line.sensorBoundAt.slice(0, 10)}` : ""}
               </span>
             </div>
@@ -151,15 +182,7 @@ export function LineDetail({
 
           <div className="rope-canvas">
             <span className="rope-tag">three.js · 실시간 홋줄 상태</span>
-            <Suspense
-              fallback={
-                <div className="center" style={{ height: "100%" }}>
-                  <div className="spin" />
-                </div>
-              }
-            >
-              <RopeScene risk={risk} />
-            </Suspense>
+            <RopeScene risk={monitoringActive ? risk : "NORMAL"} />
           </div>
 
           <div className="kv">
@@ -185,37 +208,59 @@ export function LineDetail({
                     : line.deviceOnline ? "온라인" : "오프라인"}
               </b>
             </div>
+            <div>
+              <span>마지막 센서 감지</span>
+              <b>{line.lastSeenAt ? new Date(line.lastSeenAt).toLocaleString("ko-KR") : "감지 이력 없음"}</b>
+            </div>
           </div>
 
-          {ae?.sensorKind === "piezo" && (
+          {measuredFreq != null && (
             <div>
               <div className="section-label">압전(피에조) 센서 · 구조 진동</div>
-              <div className="card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 16 }}>
+              <div
+                key={currentLiveReading?.eventId ?? (physicalDeviceOffline ? "offline-default" : "snapshot")}
+                className={`card piezo-live-card ${liveReadingFresh ? "is-fresh" : ""}`}
+                style={{ padding: 14, display: "flex", alignItems: "center", gap: 16 }}
+                aria-live="polite"
+              >
                 <div style={{ minWidth: 96 }}>
                   <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1 }}>
-                    {ae.structuralFreqHz}
+                    {measuredFreq.toFixed(1)}
                     <span style={{ fontSize: 13, fontWeight: 500 }}> Hz</span>
                   </div>
-                  <div className="muted" style={{ fontSize: 11 }}>측정 진동수</div>
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    {physicalDeviceOffline
+                      ? "기본값 · 센서 수신 대기"
+                      : liveReadingFresh
+                        ? "측정 진동수 · 실시간 수신"
+                        : currentLiveReading
+                          ? "마지막 측정 진동수"
+                          : "측정 진동수"}
+                  </div>
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
                     <span className="muted">추정 장력</span>
-                    <b>{Math.round((ae.loadRatio ?? 0) * 100)}% MBL</b>
+                    <b>{Math.round((measuredLoadRatio ?? 0) * 100)}% MBL</b>
                   </div>
                   <div style={{ height: 8, background: "var(--wire)", borderRadius: 4, overflow: "hidden" }}>
                     <div
                       style={{
-                        width: `${Math.round((ae.loadRatio ?? 0) * 100)}%`,
+                        width: `${Math.round((measuredLoadRatio ?? 0) * 100)}%`,
                         height: "100%",
-                        background: `var(--${sigRisk.toLowerCase()})`,
+                        background: `var(--${piezoRisk.toLowerCase()})`,
                       }}
                     />
                   </div>
                 </div>
               </div>
               <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                압전 센서는 진동수만 계측합니다. 아래 음향(AE) 특징량은 taut-cable 관계(T ∝ f²)로 추정한 값입니다.
+                {physicalDeviceOffline
+                  ? "센서가 오프라인이므로 현재값을 기본값 0 Hz로 표시합니다. 마지막 이력은 정밀 분석에서 확인할 수 있습니다."
+                  : "압전 센서는 진동수만 계측합니다. 아래 음향(AE) 특징량은 taut-cable 관계(T ∝ f²)로 추정한 값입니다."}
+                {currentLiveReading && (
+                  <> · 센서 시각 {new Date(currentLiveReading.occurredAt).toLocaleString("ko-KR")}</>
+                )}
               </div>
               {piezoGuide && (
                 <div className="piezo-threshold-grid">
@@ -290,9 +335,9 @@ export function LineDetail({
             </div>
           )}
 
-          {line.vesselId && line.sensorMode === "DEVICE" && !event && (
+          {line.vesselId && line.sensorMode === "DEVICE" && !line.deviceOnline && (
             <div className="alert-msg" style={{ background: "var(--wire)", color: "var(--graphite)", borderColor: "var(--line)" }}>
-              실센서 이벤트 수신 대기 중입니다. 목업 수치는 표시하지 않습니다.
+              실센서 연결 또는 다음 측정값을 기다리고 있습니다. 현재값은 기본값 0 Hz이며 목업 수치는 표시하지 않습니다.
             </div>
           )}
 

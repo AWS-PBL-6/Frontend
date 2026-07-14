@@ -1,4 +1,6 @@
-import type { RiskLevel, VesselStatus } from "../lib/types";
+import type { LineStatus, RiskLevel, VesselStatus } from "../lib/types";
+
+export const OFFLINE_COLOR = "#7d8792";
 
 /** HUD status tokens — validated ≥3:1 on dark surfaces; always paired with a
  *  text label (색상 단독으로 의미를 전달하지 않음). */
@@ -36,10 +38,19 @@ export function worstRisk(levels: RiskLevel[]): RiskLevel {
   return worst;
 }
 
-/** Display risk of a line: an unmoored line (no vessel made fast) is always
- *  NORMAL because its sensor-equipped rope is not under mooring load. */
-export function effectiveRisk(line: { vesselId?: string | null; riskLevel: RiskLevel }): RiskLevel {
-  return line.vesselId ? line.riskLevel : "NORMAL";
+/** Whether a line currently has a source capable of producing live risk. */
+export function isLineMonitoringActive(
+  line: Pick<LineStatus, "vesselId" | "sensorMode" | "deviceOnline">,
+): boolean {
+  if (!line.vesselId || line.sensorMode === "PENDING") return false;
+  return line.sensorMode === "VIRTUAL" || line.deviceOnline;
+}
+
+/** Inactive/offline lines never contribute a historical risk to live KPIs. */
+export function effectiveRisk(
+  line: Pick<LineStatus, "vesselId" | "sensorMode" | "deviceOnline" | "riskLevel">,
+): RiskLevel {
+  return isLineMonitoringActive(line) ? line.riskLevel : "NORMAL";
 }
 
 /** Selection / route accent — deliberately outside the reserved status hues. */

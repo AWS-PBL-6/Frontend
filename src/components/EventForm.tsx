@@ -66,7 +66,6 @@ export function EventForm({
             value={riskLevel}
             onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}
           >
-            <option value="NORMAL">정상</option>
             <option value="CAUTION">주의</option>
             <option value="DANGER">위험</option>
           </select>

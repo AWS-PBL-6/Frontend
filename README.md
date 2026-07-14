@@ -105,13 +105,14 @@ public/  wireframes/(screens 캡처)  tests/
 - **`components/BollardDetail.tsx`** — 볼라드 위치 정보 + 연결된 계류삭 관리.
 - **`features/LineDetail.tsx`** — 계류삭별 피에조 센서 목록 조회·클릭 연동 + 실시간 상세.
 - **`components/AppLayout.tsx`** — REST 초기 로드(lines·vessels·bollards·summary)
-  + WebSocket 구독으로 라인 위험도 실시간 갱신.
+  + WebSocket 구독으로 위험도·피에조 값·센서 온라인 상태를 실시간 갱신하고,
+  재연결 시 REST로 누락 상태를 보정.
 
 ## 데이터 흐름
 
 ```text
-IoT(AE 이벤트) → Backend(추론·저장) ──REST──▶ AppLayout 초기 로드
-                                    └─WebSocket─▶ 라인 위험도 실시간 갱신 → 트윈 색상/배너
+IoT(피에조 값) → Backend(추론·저장) ──REST──▶ AppLayout 초기/재연결 동기화
+                                  └─WebSocket─▶ 값·위험도·온라인 상태 즉시 반영
 사용자 클릭(선박/볼라드/계류삭) → 상세 슬라이드오버(REST getEvent 등)
 ```
 

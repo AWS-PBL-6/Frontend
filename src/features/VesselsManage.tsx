@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { api } from "../lib/api";
 import { VesselForm } from "../components/VesselForm";
 import { LineForm } from "../components/LineForm";
-import { effectiveRisk } from "../twin/palette";
+import { effectiveRisk, isLineMonitoringActive } from "../twin/palette";
 import type { LineStatus, LiveData, RiskLevel, Vessel, VesselStatus } from "../lib/types";
 
 const STATUS_LABEL: Record<VesselStatus, string> = {
@@ -117,8 +117,9 @@ export function VesselsManage() {
     v.lat != null && v.lon != null ? `${v.lat.toFixed(3)}, ${v.lon.toFixed(3)}` : "–";
 
   const lineRow = (l: LineStatus) => {
+    const monitoringActive = isLineMonitoringActive(l);
     const risk = effectiveRisk(l);
-    const score = l.vesselId ? l.riskScore : 0;
+    const score = monitoringActive ? l.riskScore : null;
     return (
       <div className="vessel-line-row" key={l.lineId}>
         <strong className="vlr-id">{l.lineId}</strong>
@@ -126,11 +127,11 @@ export function VesselsManage() {
           {l.sensorMode === "DEVICE" ? `센서 · ${l.sensorId}` : l.sensorMode === "VIRTUAL" ? "센서 · 시연용" : "센서 · 미연동"}
           {` / 볼라드 · ${l.bollardId ?? "미지정"}`}
         </span>
-        <span className={`badge badge--${risk}`}>
-          <span className={`dot dot--${risk}`} />
-          {RISK_LABEL[risk]}
+        <span className={`badge ${monitoringActive ? `badge--${risk}` : "badge--OFFLINE"}`}>
+          <span className={`dot ${monitoringActive ? `dot--${risk}` : "dot--OFFLINE"}`} />
+          {monitoringActive ? RISK_LABEL[risk] : "관제 대기"}
         </span>
-        <span className="rail-score">{score.toFixed(2)}</span>
+        <span className="rail-score">{score == null ? "—" : score.toFixed(2)}</span>
         <span className="vlr-actions">
           <button className="btn-sm" onClick={() => setLineModal({ existing: l })}>
             수정

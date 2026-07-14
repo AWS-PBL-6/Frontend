@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { EventDetail } from "./EventDetail";
 import { EventForm } from "../components/EventForm";
@@ -16,10 +16,11 @@ const WORKFLOW_LABEL: Record<EventWorkflowStatus, string> = {
 
 export function EventsHistory() {
   const { lines } = useOutletContext<LiveData>();
+  const [searchParams] = useSearchParams();
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [lineId, setLineId] = useState("");
-  const [riskLevel, setRiskLevel] = useState<"" | RiskLevel>("");
+  const [riskLevel, setRiskLevel] = useState<"ABNORMAL" | "CAUTION" | "DANGER">("ABNORMAL");
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export function EventsHistory() {
     try {
       const e = await api.listEvents({
         lineId: lineId || undefined,
-        riskLevel: riskLevel || undefined,
+        riskLevel,
         limit: 100,
       });
       setEvents(e);
@@ -44,6 +45,11 @@ export function EventsHistory() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const eventId = searchParams.get("eventId");
+    if (eventId) setSelected(eventId);
+  }, [searchParams]);
 
   const remove = async (ev: EventRecord) => {
     if (!window.confirm(`이벤트 ${ev.eventId} 를 삭제할까요?`)) return;
@@ -76,13 +82,15 @@ export function EventsHistory() {
         <select
           className="select"
           value={riskLevel}
-          onChange={(e) => setRiskLevel(e.target.value as "" | RiskLevel)}
+          onChange={(e) => setRiskLevel(e.target.value as "ABNORMAL" | "CAUTION" | "DANGER")}
         >
-          <option value="">전체 위험도</option>
+          <option value="ABNORMAL">주의 + 위험</option>
           <option value="DANGER">위험</option>
           <option value="CAUTION">주의</option>
-          <option value="NORMAL">정상</option>
         </select>
+        <span className="muted" style={{ alignSelf: "center", fontSize: 12 }}>
+          정상 측정은 추세 분석용으로 저장되며 이 목록에서는 제외됩니다.
+        </span>
       </div>
 
       {error && <div className="banner-danger">{error}</div>}

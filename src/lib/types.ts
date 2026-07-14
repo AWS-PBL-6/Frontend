@@ -21,6 +21,8 @@ export interface LineStatus {
   lastEventId?: string | null;
   snapbackZone?: SnapbackZone | null;
   deviceOnline: boolean;
+  lastSeenAt?: string | null;
+  lastMeasurementAt?: string | null;
   sensorMode: SensorMode;
   sensorId?: string | null; // AWS IoT Thing attached to this line's eye/splice
   sensorBoundAt?: string | null;
@@ -56,6 +58,7 @@ export interface PiezoSensor {
   registrationStatus: "REGISTERED";
   connectivityStatus: SensorConnectivityStatus;
   lastConnectedAt?: string | null;
+  lastSeenAt?: string | null;
   siteId?: string | null;
   berthId?: string | null;
   assignedLineId?: string | null;
@@ -85,6 +88,32 @@ export interface Vessel {
 
 export interface ClassProbabilities { NORMAL: number; CAUTION: number; DANGER: number; }
 
+export interface GuidanceContent {
+  riskLevel: RiskLevel;
+  headline: string;
+  situation: string;
+  immediateActions: string[];
+  followupActions: string[];
+  citations: string[];
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export interface ResponseGuidance {
+  schemaVersion: "1.0.0";
+  type: "response.guidance.generated";
+  traceId: string;
+  eventId: string;
+  generatedAt: string;
+  lineId: string;
+  vesselId?: string | null;
+  siteId: string;
+  riskLevel: RiskLevel;
+  riskScore: number;
+  source: "KB";
+  alertDispatched: boolean;
+  guidance: GuidanceContent;
+}
+
 export interface EventRecord {
   eventId: string;
   traceId: string;
@@ -97,10 +126,11 @@ export interface EventRecord {
   modelVersion: string;
   occurredAt: string;
   createdAt: string;
-  features: Record<string, number>;
+  features: Record<string, number | string>;
   context: Record<string, unknown>;
   snapbackZone?: SnapbackZone | null;
   alertMessage?: string | null;
+  responseGuidance?: ResponseGuidance | null;
   acknowledged: boolean;
   acknowledgedAt?: string | null;
   workflowStatus: EventWorkflowStatus;
@@ -120,6 +150,11 @@ export interface AlertRecord {
   traceId: string;
   messageId?: string | null;
   smsRecipientCount?: number;
+}
+
+export interface TestAlertResult {
+  event: EventRecord;
+  alert: AlertRecord | null;
 }
 
 export interface SmsRecipient {
@@ -150,6 +185,18 @@ export interface DashboardSummary {
   recentEvents: EventRecord[];
 }
 
+/** Latest physical reading delivered over the dashboard WebSocket. */
+export interface LiveSensorReading {
+  lineId: string;
+  eventId: string;
+  occurredAt: string;
+  receivedAt: string;
+  sensorKind: "PIEZO";
+  sensorId?: string | null;
+  freqHz: number;
+  loadRatio?: number | null;
+}
+
 /** Result of the berthing workflow (POST /v1/vessels/{id}/berthing). */
 export interface BerthingResult {
   vessel: Vessel;
@@ -165,6 +212,7 @@ export interface DepartureResult {
 /** ws-risk-message.v1 */
 export type WsType =
   | "line.status.updated"
+  | "sensor.reading.received"
   | "risk.caution.detected"
   | "risk.danger.detected"
   | "snapback.zone.updated"
@@ -180,10 +228,33 @@ export interface WsMessage {
     lineId: string;
     riskLevel: RiskLevel;
     riskScore: number;
-    snapbackZone?: SnapbackZone;
+    /** Newly persisted event that produced this risk snapshot. */
+    lastEventId?: string;
+    occurredAt?: string;
+    snapbackZone?: SnapbackZone | null;
     alertMessage?: string;
+    responseGuidance?: ResponseGuidance | null;
+    smsRecipientCount?: number;
+    deviceOnline?: boolean;
+    lastSeenAt?: string;
+    /** Whether this event still owns the line's latest status snapshot. */
+    statusCurrent?: boolean;
+    measurement?: {
+      sensorKind: "PIEZO";
+      eventId: string;
+      sensorId?: string;
+      freqHz: number;
+      loadRatio?: number;
+    };
   };
 }
+
+export type RealtimeConnectionState =
+  | "disabled"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "offline";
 
 /** Shared live state provided by the authed layout via router Outlet context. */
 export interface LiveData {
@@ -194,4 +265,7 @@ export interface LiveData {
   loaded: boolean;
   error: string | null;
   reload: () => void;
+  realtimeState: RealtimeConnectionState;
+  lastRealtimeAt: string | null;
+  liveReadings: Record<string, LiveSensorReading>;
 }

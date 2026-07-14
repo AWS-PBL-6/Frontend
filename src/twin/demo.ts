@@ -141,6 +141,9 @@ export function useDemoLive(): LiveData {
       loaded: true,
       error: null,
       reload: () => {},
+      realtimeState: "connected",
+      lastRealtimeAt: null,
+      liveReadings: {},
     }),
     [lines],
   );
