@@ -53,3 +53,39 @@ export function piezoBand(freqHz: number): RiskLevel {
   if (ratio >= NORMAL_MAX_RATIO) return "CAUTION";
   return "NORMAL";
 }
+
+/** AE feature proxies derived from the measured frequency (T ∝ f²). */
+export interface PiezoAeEstimate {
+  amplitudeDbAe: number;
+  snrDb: number;
+  hitCount: number;
+  durationMs: number;
+  freqLowKhz: number;
+  freqHighKhz: number;
+  signalType: string;
+}
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/**
+ * Estimate the AE feature vector directly from a live piezo frequency, on the
+ * client. Mirrors the backend adapter's monotonic load-ratio mapping
+ * (``services/piezo_adapter.to_feature_event``) so the panel updates with
+ * every realtime reading instead of waiting for the stored ML event.
+ */
+export function piezoAeEstimate(freqHz: number): PiezoAeEstimate {
+  const rho = piezoLoadRatio(freqHz);
+  return {
+    amplitudeDbAe: round(lerp(45, 96, rho), 2),
+    snrDb: round(lerp(6, 62, rho), 2),
+    hitCount: Math.round(lerp(2, 28, rho)),
+    durationMs: round(lerp(0.6, 3.8, rho), 2),
+    freqLowKhz: round(lerp(18, 26, rho), 2),
+    freqHighKhz: round(lerp(120, 205, rho), 2),
+    signalType: rho >= CAUTION_MAX_RATIO
+      ? "High amplitude"
+      : rho >= NORMAL_MAX_RATIO
+        ? "Medium amplitude"
+        : "Low amplitude",
+  };
+}
