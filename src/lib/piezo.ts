@@ -22,8 +22,27 @@ function round(value: number, digits = 1): number {
 
 export const PIEZO_FREQ_SLACK_HZ = envNum(import.meta.env.VITE_PIEZO_FREQ_SLACK_HZ, DEFAULT_SLACK_HZ);
 export const PIEZO_FREQ_CRIT_HZ = envNum(import.meta.env.VITE_PIEZO_FREQ_CRIT_HZ, DEFAULT_CRIT_HZ);
-export const PIEZO_NORMAL_MAX_HZ = envNum(import.meta.env.VITE_PIEZO_NORMAL_MAX_HZ, DEFAULT_NORMAL_MAX_HZ);
-export const PIEZO_CAUTION_MAX_HZ = envNum(import.meta.env.VITE_PIEZO_CAUTION_MAX_HZ, DEFAULT_CAUTION_MAX_HZ);
+
+// Severity bands are operator-tunable at runtime (backend settings API).
+// Build-time env values only seed the defaults until the API responds.
+let normalMaxHz = envNum(import.meta.env.VITE_PIEZO_NORMAL_MAX_HZ, DEFAULT_NORMAL_MAX_HZ);
+let cautionMaxHz = envNum(import.meta.env.VITE_PIEZO_CAUTION_MAX_HZ, DEFAULT_CAUTION_MAX_HZ);
+let minActiveHz = envNum(import.meta.env.VITE_PIEZO_MIN_ACTIVE_HZ, PIEZO_FREQ_SLACK_HZ);
+
+export function setPiezoBands(bands: {
+  minActiveHz?: number | null;
+  normalMaxHz?: number | null;
+  cautionMaxHz?: number | null;
+}): void {
+  const ok = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  if (ok(bands.minActiveHz)) minActiveHz = bands.minActiveHz;
+  if (ok(bands.normalMaxHz)) normalMaxHz = bands.normalMaxHz;
+  if (ok(bands.cautionMaxHz)) cautionMaxHz = bands.cautionMaxHz;
+}
+
+export function currentPiezoBands(): { minActiveHz: number; normalMaxHz: number; cautionMaxHz: number } {
+  return { minActiveHz, normalMaxHz, cautionMaxHz };
+}
 
 export function piezoLoadRatio(freqHz: number): number {
   const lo2 = PIEZO_FREQ_SLACK_HZ ** 2;
@@ -40,16 +59,16 @@ export function piezoGuideBands(): {
   criticalHz: number;
 } {
   return {
-    slackHz: round(PIEZO_FREQ_SLACK_HZ),
-    cautionStartHz: round(PIEZO_NORMAL_MAX_HZ),
-    dangerStartHz: round(PIEZO_CAUTION_MAX_HZ),
+    slackHz: round(minActiveHz),
+    cautionStartHz: round(normalMaxHz),
+    dangerStartHz: round(cautionMaxHz),
     criticalHz: round(PIEZO_FREQ_CRIT_HZ),
   };
 }
 
 export function piezoBand(freqHz: number): RiskLevel {
-  if (freqHz >= PIEZO_CAUTION_MAX_HZ) return "DANGER";
-  if (freqHz >= PIEZO_NORMAL_MAX_HZ) return "CAUTION";
+  if (freqHz >= cautionMaxHz) return "DANGER";
+  if (freqHz >= normalMaxHz) return "CAUTION";
   return "NORMAL";
 }
 

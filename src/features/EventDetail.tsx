@@ -234,6 +234,13 @@ export function EventDetail({
                 <div><span>hitCount (파생)</span><b>{fmt(asNum(event.features.hitCount))}</b></div>
                 <div><span>signalType</span><b>{String(event.features.signalType ?? "–")}</b></div>
               </div>
+              <div className="muted" style={{ fontSize: 11, lineHeight: 1.6, margin: "6px 2px 0" }}>
+                파생값 산식 — 실측 진동수 f를 taut-cable 관계(T ∝ f²)로 장력비
+                ρ = (f²−slack²)/(crit²−slack²) (기본 보정 slack 1 Hz · crit 6 Hz)로 정규화한 뒤,
+                모델 입력용 AE 프록시로 단조 변환: 진폭 45+51·ρ dB · SNR 6+56·ρ dB ·
+                hitCount 2+26·ρ · signalType ρ&lt;0.33 Low / &lt;0.66 Medium / 이상 High.
+                위험도 확률은 대역 경계 근접도(로지스틱, 폭 0.35 Hz) 기반.
+              </div>
 
               {event.snapbackZone && (
                 <div className="card" style={{ padding: "12px 14px" }}>
