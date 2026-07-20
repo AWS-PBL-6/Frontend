@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { CircleHelp } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { CircleHelp, Settings } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
 import type { RealtimeConnectionState } from "../lib/types";
 
 interface Props {
@@ -21,6 +21,7 @@ const REALTIME_LABEL: Record<RealtimeConnectionState, string> = {
 
 export function TopNav({ realtimeState, lastRealtimeAt, email, onOpenGuide, onSignOut }: Props) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const connected = realtimeState === "connected";
   const realtimeTitle = lastRealtimeAt
     ? `${REALTIME_LABEL[realtimeState]} · 최근 이벤트 ${new Date(lastRealtimeAt).toLocaleString("ko-KR")}`
@@ -62,6 +63,15 @@ export function TopNav({ realtimeState, lastRealtimeAt, email, onOpenGuide, onSi
           {open && (
             <div className="usermenu-pop" onMouseLeave={() => setOpen(false)}>
               <div className="email">{email ?? "signed-in"}</div>
+              <button
+                className="btn btn-ghost btn-block"
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/settings");
+                }}
+              >
+                <Settings size={13} /> 환경 설정
+              </button>
               <button className="btn btn-ghost btn-block" onClick={onSignOut}>
                 로그아웃
               </button>

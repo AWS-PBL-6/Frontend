@@ -3,7 +3,7 @@ import { RadioTower } from "lucide-react";
 import type { EventRecord, LineStatus, LiveSensorReading, RiskLevel } from "../lib/types";
 import { effectiveRisk, isLineMonitoringActive } from "../twin/palette";
 import { api } from "../lib/api";
-import { piezoBand, piezoGuideBands } from "../lib/piezo";
+import { currentPiezoBands, piezoAeEstimate, piezoBand, piezoGuideBands, piezoLoadRatio } from "../lib/piezo";
 import { PiezoSensorPicker } from "../components/PiezoSensorPicker";
 import {
   fromEvent,
@@ -59,7 +59,7 @@ export function LineDetail({
     };
   }, [line.lineId, line.vesselId, line.lastEventId]);
 
-  const ae: AeReading | null = !line.vesselId || line.sensorMode === "PENDING" || physicalDeviceOffline
+  const eventAe: AeReading | null = !line.vesselId || line.sensorMode === "PENDING" || physicalDeviceOffline
     ? null
     : event
       ? fromEvent(event)
@@ -75,22 +75,68 @@ export function LineDetail({
       || Date.parse(liveReading.occurredAt) >= Date.parse(line.lastMeasurementAt)
     );
   const currentLiveReading = !physicalDeviceOffline && readingIsCurrent ? liveReading : null;
+  // Re-render on a slow tick so freshness labels decay without new messages.
+  const [, setFreshnessTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setFreshnessTick((t) => t + 1), 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const liveReadingFresh = currentLiveReading
     ? Date.now() - Date.parse(currentLiveReading.receivedAt) <= 15_000
     : false;
-  const sigRisk = ae ? SIGNAL_RISK[ae.signalType] ?? "NORMAL" : "NORMAL";
   const measuredFreq = physicalDeviceOffline
     ? 0
     : line.sensorMode === "DEVICE"
       ? currentLiveReading?.freqHz ?? null
       : currentLiveReading?.freqHz
-        ?? (ae?.sensorKind === "piezo" ? ae.structuralFreqHz ?? null : null);
+        ?? (eventAe?.sensorKind === "piezo" ? eventAe.structuralFreqHz ?? null : null);
+  const piezoEventAe = eventAe?.sensorKind === "piezo" ? eventAe : null;
+  // Idle-band frames (< minActiveHz, e.g. 0 Hz) prove the link is alive and
+  // keep the Hz display fresh, but carry no load information. The tension/AE
+  // estimate therefore follows ACTIVE readings (>= active floor) immediately
+  // and holds the last active value while the line idles.
+  const bandsNow = currentPiezoBands();
+  const activeLiveReading =
+    currentLiveReading && currentLiveReading.freqHz >= bandsNow.minActiveHz
+      ? currentLiveReading
+      : null;
+  const [heldActiveReading, setHeldActiveReading] = useState<LiveSensorReading | null>(null);
+  useEffect(() => setHeldActiveReading(null), [line.lineId]);
+  useEffect(() => {
+    if (activeLiveReading) setHeldActiveReading(activeLiveReading);
+  }, [activeLiveReading]);
+  const tensionFreq = physicalDeviceOffline
+    ? 0
+    : (activeLiveReading ?? heldActiveReading)?.freqHz
+      ?? piezoEventAe?.structuralFreqHz
+      ?? (line.sensorMode !== "DEVICE" ? measuredFreq : null);
+  // Tension ratio is derived on the client from the measured frequency
+  // (T ∝ f², same calibration constants) so it tracks every ACTIVE reading.
   const measuredLoadRatio = physicalDeviceOffline
     ? 0
-    : line.sensorMode === "DEVICE"
-      ? currentLiveReading?.loadRatio ?? null
-      : currentLiveReading?.loadRatio
-        ?? (ae?.sensorKind === "piezo" ? ae.loadRatio ?? null : null);
+    : tensionFreq != null
+      ? piezoLoadRatio(tensionFreq)
+      : null;
+  // AE estimates are computed here from the live frequency instead of being
+  // read back from the backend-synthesized event, so they update in realtime
+  // and work even before the line has produced any ML event.
+  const ae: AeReading | null = !physicalDeviceOffline
+    && tensionFreq != null
+    && line.vesselId
+    && line.sensorMode !== "PENDING"
+    ? {
+        ...piezoAeEstimate(tensionFreq),
+        ambientNoiseDb: piezoEventAe?.ambientNoiseDb ?? 40,
+        rainMmh: piezoEventAe?.rainMmh ?? 0,
+        windMps: piezoEventAe?.windMps ?? 0,
+        craneActive: piezoEventAe?.craneActive ?? false,
+        live: liveReadingFresh,
+        sensorKind: "piezo",
+        structuralFreqHz: tensionFreq,
+        loadRatio: measuredLoadRatio,
+      }
+    : eventAe;
+  const sigRisk = ae ? SIGNAL_RISK[ae.signalType] ?? "NORMAL" : "NORMAL";
   const piezoGuide = measuredFreq != null ? piezoGuideBands() : null;
   const piezoRisk = measuredFreq != null ? piezoBand(measuredFreq) : "NORMAL";
 

@@ -6,6 +6,7 @@ import { RiskGuidanceAlert } from "./RiskGuidanceAlert";
 import { useAuth } from "../auth/AuthProvider";
 import { useWebSocket } from "../lib/useWebSocket";
 import { api } from "../lib/api";
+import { setPiezoBands } from "../lib/piezo";
 import type {
   Bollard,
   DashboardSummary,
@@ -58,27 +59,55 @@ export function applyWs(lines: LineStatus[], msg: WsMessage): LineStatus[] {
   // decision. Applying it would reintroduce a stale DANGER after a newer
   // NORMAL measurement has already become current.
   if (msg.type === "alert.sent") return lines;
-  // A valid event may finish after a newer measurement (DANGER/RAG is the
-  // common case). It stays in history and may still raise an alert, but must
-  // never roll the current line snapshot backwards.
-  if (d.statusCurrent === false) return lines;
   const measurementAt = d.measurement ? d.occurredAt : undefined;
-  if (
-    measurementAt
-    && nextTime(measurementAt) < nextTime(lines[idx].lastMeasurementAt)
-  ) {
+
+  // Presence/raw-telemetry messages refresh device state and measurement
+  // freshness but never own the risk state — that belongs to inference
+  // results below.
+  if (msg.type === "sensor.reading.received" || msg.type === "device.offline") {
+    if (
+      measurementAt
+      && nextTime(measurementAt) < nextTime(lines[idx].lastMeasurementAt)
+    ) {
+      return lines;
+    }
+    const next = lines.slice();
+    next[idx] = {
+      ...next[idx],
+      deviceOnline: d.deviceOnline ?? next[idx].deviceOnline,
+      lastSeenAt: d.lastSeenAt ?? next[idx].lastSeenAt,
+      lastMeasurementAt: measurementAt ?? next[idx].lastMeasurementAt,
+      updatedAt: msg.sentAt,
+    };
+    return next;
+  }
+
+  // Inference results (line.status.updated / risk.* / snapback.zone.updated):
+  // a result may finish after newer raw readings arrived (readings every
+  // 1-2s, inference 1.5s+, DANGER guidance seconds more) and must still
+  // advance the shown status. Only a result strictly older than the one that
+  // set the current status is dropped — mirrors the backend's
+  // statusMeasurementAt conditional update.
+  if (d.statusCurrent === false) return lines;
+  const statusAt = d.occurredAt;
+  if (statusAt && nextTime(statusAt) < nextTime(lines[idx].statusMeasurementAt)) {
     return lines;
   }
+  const prev = lines[idx];
   const next = lines.slice();
   next[idx] = {
-    ...next[idx],
+    ...prev,
     riskLevel: d.riskLevel,
     riskScore: d.riskScore,
-    snapbackZone: "snapbackZone" in d ? d.snapbackZone ?? null : next[idx].snapbackZone,
-    lastEventId: d.lastEventId ?? next[idx].lastEventId,
-    deviceOnline: d.deviceOnline ?? next[idx].deviceOnline,
-    lastSeenAt: d.lastSeenAt ?? next[idx].lastSeenAt,
-    lastMeasurementAt: measurementAt ?? next[idx].lastMeasurementAt,
+    snapbackZone: "snapbackZone" in d ? d.snapbackZone ?? null : prev.snapbackZone,
+    lastEventId: d.lastEventId ?? prev.lastEventId,
+    deviceOnline: d.deviceOnline ?? prev.deviceOnline,
+    lastSeenAt: d.lastSeenAt ?? prev.lastSeenAt,
+    statusMeasurementAt: statusAt ?? prev.statusMeasurementAt,
+    lastMeasurementAt:
+      measurementAt && nextTime(measurementAt) > nextTime(prev.lastMeasurementAt)
+        ? measurementAt
+        : prev.lastMeasurementAt,
     updatedAt: msg.sentAt,
   };
   return next;
@@ -128,6 +157,9 @@ export function AppLayout() {
         api.summary(),
         api.listEvents({ limit: 100 }),
       ]);
+      // Severity bands are operator-tunable; sync the client-side band
+      // display with the backend's effective settings (best-effort).
+      void api.getPiezoBands().then(setPiezoBands).catch(() => undefined);
       setLines((current) => mergeLineSnapshots(current, l));
       setVessels(v);
       setBollards(b);

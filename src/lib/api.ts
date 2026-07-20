@@ -10,6 +10,7 @@ import type {
   EventWorkflowStatus,
   LineLayout,
   LineStatus,
+  PiezoBandSettings,
   PiezoSensor,
   RiskLevel,
   SensorMode,
@@ -159,6 +160,11 @@ export const api = {
   updateEvent: (id: string, body: Partial<EventInput> & Partial<EventWorkflowInput>) =>
     req<EventRecord>("PUT", `/v1/events/${encodeURIComponent(id)}`, body),
   deleteEvent: (id: string) => req<DeleteResult>("DELETE", `/v1/events/${encodeURIComponent(id)}`),
+
+  // --- operator settings ---
+  getPiezoBands: () => req<PiezoBandSettings>("GET", "/v1/settings/piezo-bands"),
+  updatePiezoBands: (body: Partial<PiezoBandSettings>) =>
+    req<PiezoBandSettings>("PUT", "/v1/settings/piezo-bands", body),
 
   // --- SMS recipients ---
   listSmsRecipients: () => req<SmsRecipient[]>("GET", "/v1/sms-recipients"),

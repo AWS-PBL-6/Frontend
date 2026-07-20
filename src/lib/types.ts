@@ -23,11 +23,20 @@ export interface LineStatus {
   deviceOnline: boolean;
   lastSeenAt?: string | null;
   lastMeasurementAt?: string | null;
+  statusMeasurementAt?: string | null; // measurement time of the reading that set riskLevel
   sensorMode: SensorMode;
   sensorId?: string | null; // AWS IoT Thing attached to this line's eye/splice
   sensorBoundAt?: string | null;
   bollardId?: string | null; // current quay attachment point
   vesselId?: string | null; // transient: vessel moored on this line right now
+}
+
+/** Operator-tunable frequency severity bands (backend settings API). */
+export interface PiezoBandSettings {
+  minActiveHz: number;
+  normalMaxHz: number;
+  cautionMaxHz: number;
+  updatedAt?: string | null;
 }
 
 /** One-time sensor onboarding state of a mooring line:
