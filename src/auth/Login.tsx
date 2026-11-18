@@ -1,10 +1,30 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { confirmSignIn, signIn, signInWithRedirect } from "aws-amplify/auth";
+import {
+  autoSignIn,
+  confirmSignIn,
+  confirmSignUp,
+  resendSignUpCode,
+  signIn,
+  signInWithRedirect,
+  signUp,
+} from "aws-amplify/auth";
 import { config } from "../lib/config";
 import { useAuth } from "./AuthProvider";
 
-type Mode = "signin" | "newPassword";
+type Mode = "signin" | "newPassword" | "signup" | "confirmSignup";
+
+const PASSWORD_HINT = "8자 이상, 영문 대문자·소문자·숫자를 포함하세요.";
+
+function errorText(err: unknown, fallback: string): string {
+  const msg = err instanceof Error ? err.message : "";
+  // The PreSignUp Lambda rejects emails outside the SSM allowlist with this code.
+  if (msg.includes("NOT_ALLOWLISTED")) {
+    return "가입이 허용되지 않은 이메일입니다. 관리자에게 등록을 요청하세요.";
+  }
+  if (/password/i.test(msg) && /policy|conform/i.test(msg)) return `비밀번호 조건 미충족: ${PASSWORD_HINT}`;
+  return msg || fallback;
+}
 
 export function Login() {
   const navigate = useNavigate();
@@ -13,8 +33,16 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const switchMode = (next: Mode) => {
+    setError(null);
+    setNotice(null);
+    setMode(next);
+  };
 
   const finish = async () => {
     await refresh();
@@ -57,6 +85,61 @@ export function Login() {
     }
   };
 
+  const onSignUp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await signUp({
+        username: email,
+        password,
+        options: { userAttributes: { email }, autoSignIn: true },
+      });
+      if (res.nextStep.signUpStep === "CONFIRM_SIGN_UP") {
+        setNotice(`${email}로 발송된 인증 코드를 입력하세요.`);
+        setMode("confirmSignup");
+      } else {
+        switchMode("signin");
+      }
+    } catch (err) {
+      setError(errorText(err, "회원가입 실패"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onConfirmSignUp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await confirmSignUp({ username: email, confirmationCode: code.trim() });
+      if (res.nextStep.signUpStep === "COMPLETE_AUTO_SIGN_IN") {
+        const signedIn = await autoSignIn();
+        if (signedIn.isSignedIn) {
+          await finish();
+          return;
+        }
+      }
+      switchMode("signin");
+      setNotice("인증이 완료되었습니다. 로그인하세요.");
+    } catch (err) {
+      setError(errorText(err, "인증 실패"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onResendCode = async () => {
+    setError(null);
+    try {
+      await resendSignUpCode({ username: email });
+      setNotice("인증 코드를 다시 보냈습니다.");
+    } catch (err) {
+      setError(errorText(err, "코드 재발송 실패"));
+    }
+  };
+
   const onGoogle = async () => {
     setError(null);
     try {
@@ -75,8 +158,69 @@ export function Login() {
         </div>
 
         {error && <div className="err">{error}</div>}
+        {notice && !error && <p style={{ color: "#cdccc6", fontSize: 13 }}>{notice}</p>}
 
-        {mode === "signin" ? (
+        {mode === "signup" && (
+          <form className="login-card" onSubmit={onSignUp} style={{ gap: "var(--sp-3)" }}>
+            <div className="field">
+              <label htmlFor="su-email">이메일</label>
+              <input
+                id="su-email"
+                className="input"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="su-password">비밀번호</label>
+              <input
+                id="su-password"
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                aria-describedby="su-password-hint"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <small id="su-password-hint" style={{ color: "#cdccc6" }}>{PASSWORD_HINT}</small>
+            </div>
+            <button className="btn btn-accent btn-block" type="submit" disabled={busy}>
+              {busy ? "가입 중…" : "회원가입"}
+            </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={() => switchMode("signin")}>
+              로그인으로 돌아가기
+            </button>
+          </form>
+        )}
+
+        {mode === "confirmSignup" && (
+          <form className="login-card" onSubmit={onConfirmSignUp} style={{ gap: "var(--sp-3)" }}>
+            <div className="field">
+              <label htmlFor="su-code">이메일 인증 코드</label>
+              <input
+                id="su-code"
+                className="input"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+              />
+            </div>
+            <button className="btn btn-accent btn-block" type="submit" disabled={busy}>
+              {busy ? "확인 중…" : "인증 후 로그인"}
+            </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={onResendCode}>
+              인증 코드 다시 받기
+            </button>
+          </form>
+        )}
+
+        {mode === "signin" && (
           <form className="login-card" onSubmit={onSignIn} style={{ gap: "var(--sp-3)" }}>
             <div className="field">
               <label htmlFor="email">이메일</label>
@@ -116,8 +260,13 @@ export function Login() {
             >
               <span aria-hidden>G</span> Google로 계속하기
             </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={() => switchMode("signup")}>
+              계정이 없으면 회원가입
+            </button>
           </form>
-        ) : (
+        )}
+
+        {mode === "newPassword" && (
           <form className="login-card" onSubmit={onNewPassword} style={{ gap: "var(--sp-3)" }}>
             <p style={{ color: "#cdccc6", fontSize: 13 }}>
               최초 로그인입니다. 새 비밀번호를 설정하세요.
