@@ -3,16 +3,19 @@ import { useNavigate } from "react-router-dom";
 import {
   autoSignIn,
   confirmSignIn,
+  confirmResetPassword,
   confirmSignUp,
   resendSignUpCode,
+  resetPassword,
   signIn,
   signInWithRedirect,
+  signOut,
   signUp,
 } from "aws-amplify/auth";
 import { config } from "../lib/config";
 import { useAuth } from "./AuthProvider";
 
-type Mode = "signin" | "newPassword" | "signup" | "confirmSignup";
+type Mode = "signin" | "newPassword" | "signup" | "confirmSignup" | "forgot" | "confirmForgot";
 
 const PASSWORD_HINT = "8자 이상, 영문 대문자·소문자·숫자를 포함하세요.";
 
@@ -24,6 +27,18 @@ function errorText(err: unknown, fallback: string): string {
   }
   if (/password/i.test(msg) && /policy|conform/i.test(msg)) return `비밀번호 조건 미충족: ${PASSWORD_HINT}`;
   return msg || fallback;
+}
+
+// A session left by another tab or an earlier login makes signIn throw;
+// replace it with the account the user just typed.
+async function signInFresh(input: Parameters<typeof signIn>[0]) {
+  try {
+    return await signIn(input);
+  } catch (err) {
+    if (!(err instanceof Error) || err.name !== "UserAlreadyAuthenticatedException") throw err;
+    await signOut();
+    return signIn(input);
+  }
 }
 
 export function Login() {
@@ -54,7 +69,7 @@ export function Login() {
     setError(null);
     setBusy(true);
     try {
-      const res = await signIn({ username: email, password });
+      const res = await signInFresh({ username: email, password });
       if (res.isSignedIn) {
         await finish();
       } else if (
@@ -140,6 +155,37 @@ export function Login() {
     }
   };
 
+  const onForgot = async (e?: FormEvent) => {
+    e?.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await resetPassword({ username: email });
+      setNotice(`${email}로 발송된 인증 코드와 새 비밀번호를 입력하세요.`);
+      setMode("confirmForgot");
+    } catch (err) {
+      setError(errorText(err, "인증 코드 발송 실패"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onConfirmForgot = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await confirmResetPassword({ username: email, confirmationCode: code.trim(), newPassword });
+      switchMode("signin");
+      setPassword("");
+      setNotice("비밀번호를 변경했습니다. 새 비밀번호로 로그인하세요.");
+    } catch (err) {
+      setError(errorText(err, "비밀번호 변경 실패"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onGoogle = async () => {
     setError(null);
     try {
@@ -220,6 +266,69 @@ export function Login() {
           </form>
         )}
 
+        {mode === "forgot" && (
+          <form className="login-card" onSubmit={onForgot} style={{ gap: "var(--sp-3)" }}>
+            <div className="field">
+              <label htmlFor="fp-email">가입한 이메일</label>
+              <input
+                id="fp-email"
+                className="input"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <button className="btn btn-accent btn-block" type="submit" disabled={busy}>
+              {busy ? "발송 중…" : "인증 코드 받기"}
+            </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={() => switchMode("signin")}>
+              로그인으로 돌아가기
+            </button>
+          </form>
+        )}
+
+        {mode === "confirmForgot" && (
+          <form className="login-card" onSubmit={onConfirmForgot} style={{ gap: "var(--sp-3)" }}>
+            <div className="field">
+              <label htmlFor="fp-code">이메일 인증 코드</label>
+              <input
+                id="fp-code"
+                className="input"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="fp-newpw">새 비밀번호</label>
+              <input
+                id="fp-newpw"
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                aria-describedby="fp-newpw-hint"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <small id="fp-newpw-hint" style={{ color: "#cdccc6" }}>{PASSWORD_HINT}</small>
+            </div>
+            <button className="btn btn-accent btn-block" type="submit" disabled={busy}>
+              {busy ? "변경 중…" : "비밀번호 변경"}
+            </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={() => onForgot()} disabled={busy}>
+              인증 코드 다시 받기
+            </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={() => switchMode("signin")}>
+              로그인으로 돌아가기
+            </button>
+          </form>
+        )}
+
         {mode === "signin" && (
           <form className="login-card" onSubmit={onSignIn} style={{ gap: "var(--sp-3)" }}>
             <div className="field">
@@ -262,6 +371,9 @@ export function Login() {
             </button>
             <button type="button" className="btn btn-neutral btn-block" onClick={() => switchMode("signup")}>
               계정이 없으면 회원가입
+            </button>
+            <button type="button" className="btn btn-neutral btn-block" onClick={() => switchMode("forgot")}>
+              비밀번호 찾기
             </button>
           </form>
         )}
